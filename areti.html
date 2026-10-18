@@ -1,0 +1,1429 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<script>
+{
+  try {
+    const th = localStorage.getItem("fin-theme");
+    if (th === "dark" || th === "light") {
+      document.documentElement.setAttribute("data-theme", th);
+      document.querySelector('meta[name="color-scheme"]').content = th;
+    }
+  } catch (e) {}
+}
+</script>
+<title>Household Expenses</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a ledger-style column. Filters on top, KPI strip, monthly chart full width, then category + merchant side by side, then the ledger table. */
+:root {
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --ink: #0f172a;
+  --ink-2: #475569;
+  --ink-3: #64748b;
+  --line: #dde4ee;
+  --line-soft: #edf1f7;
+  --accent: #1d4ed8;
+  --accent-soft: #dbeafe;
+  --alpha: #2a78d6;
+  --nbg: #1baf7a;
+  --areti: #7c3aed;
+  --bar: #2a78d6;
+  --refund: #0a7d43;
+  --up: #b4432f;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #080b11; --surface: #101622; --ink: #ecf2fc; --ink-2: #aebcd0; --ink-3: #7c8ca5;
+    --line: #202b3d; --line-soft: #161f2e; --accent: #3b82f6; --accent-soft: #172554;
+    --alpha: #3987e5; --nbg: #199e70; --areti: #a78bfa; --bar: #3987e5; --refund: #4cc98a; --up: #f08a72; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #080b11; --surface: #101622; --ink: #ecf2fc; --ink-2: #aebcd0; --ink-3: #7c8ca5;
+  --line: #202b3d; --line-soft: #161f2e; --accent: #3b82f6; --accent-soft: #172554;
+  --alpha: #3987e5; --nbg: #199e70; --areti: #a78bfa; --bar: #3987e5; --refund: #4cc98a; --up: #f08a72; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 48px; -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(26px, 4vw, 40px); line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.lucide { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; fill: none; flex: none; vertical-align: -2px; }
+h1 .lucide { width: 28px; height: 28px; stroke-width: 2.2; color: var(--accent); vertical-align: -4px; margin-right: 4px; }
+h2 .lucide { width: 18px; height: 18px; color: var(--accent); vertical-align: -3px; margin-right: 6px; }
+.sub { color: var(--ink-2); margin: 6px 0 0; }
+.head-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.sources { display: flex; gap: 8px; flex-wrap: wrap; }
+.src { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--surface); }
+.dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; flex: none; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.seg { display: inline-flex; align-items: center; gap: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); padding: 3px; }
+.seg button { border: 0; background: transparent; color: var(--ink-2); font: 500 13.5px var(--font-body); padding: 6px 13px; min-height: 34px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: background .15s ease, color .15s ease, border-color .15s ease; white-space: nowrap; }
+.seg button:hover:not([aria-pressed="true"]) { background: var(--line-soft); color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #ffffff; font-weight: 600; box-shadow: 0 1px 3px rgba(29, 78, 216, 0.25); }
+.seg button.year-drill { border: 1px dashed var(--line); background: var(--bg); color: var(--ink-2); font-size: 12.5px; padding: 5px 11px; min-height: 32px; }
+.seg button.year-drill:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.seg button.year-drill.is-open { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); padding: 5px 9px; }
+.seg button.year-drill .lucide { width: 14px; height: 14px; }
+.seg button.year-old { animation: yearDrillIn .18s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes yearDrillIn { from { opacity: 0; transform: translateX(8px) scale(0.95); } to { opacity: 1; transform: translateX(0) scale(1); } }
+.seg-cnt { font-family: var(--font-mono); font-size: 11px; opacity: 0.78; font-weight: 500; }
+.seg button[aria-pressed="true"] .seg-cnt { opacity: 0.92; }
+.smart-ctrl { display: inline-flex; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 2px 4px; min-height: 40px; transition: border-color .15s, background .15s; }
+.smart-ctrl.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.smart-ctrl .ctrl-ico { color: var(--ink-3); margin-left: 8px; margin-right: 2px; display: inline-flex; align-items: center; pointer-events: none; }
+.smart-ctrl.is-active .ctrl-ico { color: var(--accent); }
+.smart-ctrl select { border: 0; background: transparent; color: var(--ink); font: 500 13.5px var(--font-body); padding: 6px 8px; min-height: 34px; cursor: pointer; outline: none; }
+.smart-ctrl.is-active select { color: var(--accent); font-weight: 600; }
+.nav-step { border: 0; background: transparent; color: var(--ink-2); width: 28px; height: 28px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; transition: background .15s, color .15s; }
+.nav-step:hover:not(:disabled) { background: var(--line-soft); color: var(--accent); }
+.nav-step:disabled { opacity: 0.3; cursor: default; }
+.mob-search-btn { display: none; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); cursor: pointer; padding: 0; flex: none; }
+.mob-search-btn.is-open { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.smart-search { position: relative; flex: 1 1 200px; min-width: 170px; display: flex; align-items: center; }
+.smart-search .s-ico { position: absolute; left: 12px; color: var(--ink-3); pointer-events: none; display: inline-flex; }
+.smart-search input[type="search"] { width: 100%; font: 13.5px var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 78px 8px 34px; min-height: 40px; transition: border-color .15s, box-shadow .15s; -webkit-appearance: none; appearance: none; }
+.smart-search input[type="search"]::-webkit-search-cancel-button { display: none; }
+.smart-search input[type="search"]:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.smart-search.is-active input[type="search"] { border-color: var(--accent); background: var(--accent-soft); }
+.smart-search .s-meta { position: absolute; right: 8px; display: inline-flex; align-items: center; gap: 4px; }
+.smart-search .s-badge { font-family: var(--font-mono); font-size: 11px; color: var(--accent); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.smart-search .s-clear { border: 0; background: var(--line-soft); color: var(--ink-2); width: 24px; height: 24px; border-radius: 999px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.smart-search .s-clear:hover { background: var(--accent); color: #ffffff; }
+select { font: 14px var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-height: 40px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font: 500 12.5px var(--font-body); background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in oklab, var(--accent) 25%, transparent); border-radius: 999px; padding: 5px 11px; min-height: 32px; cursor: pointer; transition: background .15s, color .15s; }
+.chip:hover { background: var(--accent); color: #ffffff; }
+.chip.chip-reset { background: var(--surface); color: var(--ink-2); border-color: var(--line); }
+.chip.chip-reset:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+button:focus-visible, select:focus-visible, input:focus-visible, .row-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.kpi { background: var(--surface); padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.kpi .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+.kpi .label .lucide { width: 14px; height: 14px; color: var(--accent); }
+.kpi .value { font-family: var(--font-display); font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpi .note { font-size: 12px; color: var(--ink-2); }
+.kpi .note:empty { display: none; }
+.up { color: var(--up); } .down { color: var(--refund); }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 6px 12px; flex-wrap: wrap; margin-bottom: 12px; }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 19px; margin: 0; }
+.hint { font-size: 12px; color: var(--ink-3); }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--ink-3); font: 11px var(--font-mono); }
+.chart .gridline { stroke: var(--line-soft); }
+.chart .base { stroke: var(--line); }
+.chart .hit { fill: transparent; cursor: pointer; }
+.chart .total { fill: var(--ink-2); font-weight: 500; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.12); min-width: 150px; z-index: 2; }
+.tip b { display: block; font-weight: 600; margin-bottom: 4px; }
+.tip .r { display: flex; justify-content: space-between; gap: 14px; }
+.tip .r span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+
+.bars { display: flex; flex-direction: column; gap: 2px; }
+.row-btn { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 2fr) 84px 44px; align-items: center; gap: 10px; padding: 8px 6px; min-height: 40px; border-radius: 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; width: 100%; }
+.row-btn:hover { background: var(--line-soft); }
+.row-btn[aria-pressed="true"] { background: var(--accent-soft); }
+.row-btn .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.row-btn .name .lucide { width: 14px; height: 14px; color: var(--ink-3); }
+.row-btn .track { height: 10px; position: relative; }
+.row-btn .fill { position: absolute; inset: 0 auto 0 0; background: var(--bar); border-radius: 0 4px 4px 0; min-width: 2px; }
+.row-btn .amt { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.row-btn .pct, .row-btn .cnt { text-align: right; color: var(--ink-3); font-size: 12px; font-family: var(--font-mono); }
+.dim .fill { opacity: 0.35; }
+#merchants .row-btn { cursor: pointer; }
+#merchants .row-btn:hover { background: var(--line-soft); }
+
+/* Gemini AI Categorizer & Audit Panel */
+.ai-panel { border-color: var(--accent); background: linear-gradient(180deg, var(--accent-soft) 0%, var(--surface) 68px); transition: padding .15s ease; container-type: inline-size; }
+.ai-panel.is-minimized { background: linear-gradient(90deg, var(--accent-soft) 0%, var(--surface) 75%); padding-block: 12px; }
+.ai-panel.is-minimized .panel-head { margin-bottom: 0; }
+.ai-head-left { display: flex; flex-direction: column; gap: 4px; cursor: pointer; user-select: none; min-width: 0; flex: 1; }
+.ai-head-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ai-head-title-row h2 { font-size: clamp(1rem, 0.9rem + 0.5vw, 1.2rem); }
+.ai-last-check { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; color: var(--accent); background: var(--surface); border: 1px solid var(--line); padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.ai-last-check .lucide { width: 12px; height: 12px; }
+.btn-primary, .btn-ghost { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--font-body); border-radius: 8px; padding: 7px 12px; min-height: 36px; cursor: pointer; white-space: nowrap; }
+.btn-primary { background: var(--accent); color: #ffffff; border: 1px solid var(--accent); }
+.btn-primary:disabled { opacity: 0.65; cursor: wait; }
+.btn-ghost { background: var(--surface); color: var(--ink-2); border: 1px solid var(--line); }
+.btn-ghost:hover { background: var(--line-soft); color: var(--ink); }
+.ai-min-btn { padding: 6px 11px; min-height: 34px; font-size: 12.5px; flex: none; }
+.ai-body-wrap { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ai-ctrls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; justify-content: space-between; }
+.ai-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#expAiScopeSeg { display: inline-flex; flex-wrap: wrap; border-radius: 10px; max-width: 100%; padding: 3px; gap: 2px; }
+#expAiScopeSeg button { border-radius: 7px; min-width: 0; }
+.ai-key-box { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.ai-key-input-wrap { position: relative; flex: 1 1 260px; display: flex; align-items: center; }
+.ai-key-input-wrap input { width: 100%; padding-right: 40px; font-family: var(--font-mono); font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); color: var(--ink); }
+.ai-key-toggle { position: absolute; right: 6px; border: 0; background: transparent; color: var(--ink-3); padding: 6px; cursor: pointer; border-radius: 6px; display: inline-flex; align-items: center; }
+.ai-loader { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--accent); border-radius: 9px; background: var(--accent-soft); color: var(--ink); display: flex; flex-direction: column; gap: 8px; }
+.ai-progress { height: 4px; width: 100%; background: var(--line); border-radius: 999px; overflow: hidden; position: relative; }
+.ai-progress span { position: absolute; inset: 0; width: 42%; background: var(--accent); border-radius: 999px; animation: ai-slide 1.1s ease-in-out infinite; }
+@keyframes ai-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+.ai-loader-body { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--accent); }
+.ai-status { margin-top: 12px; font-size: 13px; color: var(--ink-2); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.exp-ai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+.exp-ai-card-wrap { container-type: inline-size; }
+.exp-ai-card { background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.exp-ai-card.is-ai-suggested { border-color: var(--accent); }
+.exp-ai-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.exp-ai-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.exp-ai-amt { font-family: var(--font-mono); font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.exp-ai-title { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--ink); display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.exp-ai-title button { all: unset; cursor: pointer; color: var(--accent); font: 500 11.5px var(--font-body); display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); }
+.exp-ai-title button:hover { background: var(--accent-soft); }
+.exp-ai-note { font-size: 12.5px; color: var(--ink-2); line-height: 1.4; flex: 1; }
+.exp-ai-foot { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line-soft); margin-top: auto; }
+@media (min-width: 600px) {
+  .exp-ai-foot { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+@supports (container-type: inline-size) {
+  @media (min-width: 600px) { .exp-ai-foot { flex-direction: column; align-items: stretch; } }
+  @container (min-width: 240px) {
+    .exp-ai-foot { flex-direction: row; align-items: center; justify-content: space-between; }
+  }
+}
+.cat-sel { font: 500 12px var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; min-height: 30px; max-width: 100%; cursor: pointer; }
+.cat-sel.is-custom { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.ai-sources { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-3); }
+.ai-sources a, .offer-link { color: var(--accent); text-decoration: none; background: var(--line-soft); padding: 3px 9px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.ai-sources a:hover, .offer-link:hover { background: var(--accent-soft); }
+
+.table-wrap { overflow: auto; max-height: 560px; border-top: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { position: sticky; top: 0; background: var(--surface); text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 600; padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+th button .lucide { width: 13px; height: 13px; color: var(--ink-3); }
+th button:focus-visible { outline: 2px solid var(--accent); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+td.r, th.r { text-align: right; }
+td.m { font-weight: 500; word-break: break-word; }
+td.muted { color: var(--ink-2); white-space: nowrap; }
+.refund { color: var(--refund); }
+.tag { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.more { margin-top: 12px; display: flex; justify-content: center; }
+.more button { font: 500 14px var(--font-body); color: var(--accent); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 9px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.foot { color: var(--ink-3); font-size: 12px; max-width: 75ch; }
+
+[hidden] { display: none !important; }
+.wrap { container-type: inline-size; }
+
+@media (max-width: 960px) { .grid2 { grid-template-columns: minmax(0, 1fr); } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  body { padding-block: 14px 32px; padding-inline: max(10px, env(safe-area-inset-left, 0px)); }
+  .wrap { gap: 12px; }
+  .panel { padding: 12px; }
+  .head-right { display: none; }
+  .sub, .hint, .kpi .note, .foot, .sources .src { font-size: 10.5px; line-height: 1.25; }
+  .panel-head .hint, #expAiSub { display: none; }
+  .filters { gap: 6px; }
+  .seg { padding: 2px; gap: 2px; }
+  .seg button { padding: 4px 10px; min-height: 30px; font-size: 12px; }
+  .seg button.year-drill { padding: 4px 8px; min-height: 28px; font-size: 11.5px; }
+  .seg-cnt, .nav-step { display: none; }
+  .smart-ctrl { min-height: 34px; padding: 1px 4px; }
+  .smart-ctrl select { font-size: 12px; padding: 4px 6px; min-height: 30px; max-width: 150px; }
+  .mob-search-btn { display: inline-flex; }
+  .smart-search:not(.is-open):not(.is-active) { display: none; }
+  .smart-search { flex: 1 1 100%; }
+  .row-btn { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px; }
+  .row-btn .pct, .row-btn .cnt { display: none; }
+  .kpi { padding: 10px 12px; } .kpi .value { font-size: clamp(20px, 5.5vw, 24px); }
+  .hide-sm { display: none; }
+  .ai-ctrls { flex-direction: column; align-items: stretch; }
+  #expAiScopeSeg { width: 100%; display: flex; flex-direction: column; align-items: stretch; border-radius: 10px; padding: 3px; gap: 2px; }
+  #expAiScopeSeg button { width: 100%; min-width: 0; justify-content: flex-start; font-size: 12.5px; padding: 8px 10px; min-height: 34px; border-radius: 7px; white-space: normal; text-align: left; line-height: 1.25; }
+  .ai-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+  #expAiFetchBtn { flex: 1 1 auto; justify-content: center; }
+  .exp-ai-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 380px) { .kpis { grid-template-columns: minmax(0, 1fr); } }
+@supports (container-type: inline-size) {
+  @container (max-width: 900px) { .grid2 { grid-template-columns: minmax(0, 1fr); } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @container (max-width: 620px) {
+    .ai-ctrls { flex-direction: column; align-items: stretch; }
+    #expAiScopeSeg { width: 100%; display: flex; flex-direction: column; align-items: stretch; border-radius: 10px; padding: 3px; gap: 2px; }
+    #expAiScopeSeg button { width: 100%; min-width: 0; justify-content: flex-start; font-size: 12.5px; padding: 8px 10px; min-height: 34px; border-radius: 7px; white-space: normal; text-align: left; line-height: 1.25; }
+    .ai-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+    #expAiFetchBtn { flex: 1 1 auto; justify-content: center; }
+    .exp-ai-grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @container (max-width: 580px) {
+    .head-right { display: none; }
+    .sub, .hint, .kpi .note, .foot, .sources .src { font-size: 10.5px; line-height: 1.25; }
+    .panel-head .hint { display: none; }
+    .filters { gap: 6px; }
+    .seg { padding: 2px; gap: 2px; }
+    .seg button { padding: 4px 10px; min-height: 30px; font-size: 12px; }
+    .seg button.year-drill { padding: 4px 8px; min-height: 28px; font-size: 11.5px; }
+    .seg-cnt, .nav-step { display: none; }
+    .smart-ctrl { min-height: 34px; padding: 1px 4px; }
+    .smart-ctrl select { font-size: 12px; padding: 4px 6px; min-height: 30px; max-width: 150px; }
+    .mob-search-btn { display: inline-flex; }
+    .smart-search:not(.is-open):not(.is-active) { display: none; }
+    .smart-search { flex: 1 1 100%; }
+    .row-btn { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px; }
+    .row-btn .pct, .row-btn .cnt { display: none; }
+    .hide-sm { display: none; }
+  }
+  @container (max-width: 360px) { .kpis { grid-template-columns: minmax(0, 1fr); } }
+}
+@media (prefers-reduced-motion: no-preference) { .row-btn .fill { transition: width .25s ease; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1><i data-lucide="credit-card"></i><span data-i18n="h1"></span> <span id="yearTitle"></span></h1>
+      <p class="sub" id="range"></p>
+    </div>
+    <div class="head-right">
+      <div class="sources" id="sourcesWrap">
+        <span class="src"><i class="dot" style="background:var(--alpha)"></i>Alpha Bank · Affinity Mastercard</span>
+        <span class="src"><i class="dot" style="background:var(--nbg)"></i>NBG · Gold Mastercard</span>
+        <span class="src"><i class="dot" style="background:var(--areti)"></i>Alpha · Debit Αρετής</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="filters" role="group" data-i18n-aria="filters">
+    <div class="seg" id="ownerSeg" role="group" aria-label="Κάτοχος"></div>
+    <div class="seg" id="yearSeg" role="group" data-i18n-aria="year"></div>
+    <div class="smart-ctrl" id="monthCtrl">
+      <button type="button" class="nav-step" id="monthPrev" title="Previous month" aria-label="Previous month"><i data-lucide="chevron-left"></i></button>
+      <span class="ctrl-ico"><i data-lucide="calendar"></i></span>
+      <select id="monthSel" data-i18n-aria="month"></select>
+      <button type="button" class="nav-step" id="monthNext" title="Next month" aria-label="Next month"><i data-lucide="chevron-right"></i></button>
+    </div>
+    <div class="seg" id="bankSeg" role="group" data-i18n-aria="bank"></div>
+    <button type="button" class="mob-search-btn" id="mobSearchBtn" aria-label="Search"><i data-lucide="search"></i></button>
+    <div class="smart-search" id="searchWrap">
+      <span class="s-ico"><i data-lucide="search"></i></span>
+      <input type="search" id="q" data-i18n-ph="searchPh" data-i18n-aria="searchAria">
+      <span class="s-meta">
+        <span class="s-badge" id="qBadge" hidden></span>
+        <button type="button" class="s-clear" id="qClear" hidden aria-label="Clear search"><i data-lucide="x"></i></button>
+      </span>
+    </div>
+    <span id="chips" class="filters"></span>
+  </div>
+
+  <section class="kpis" data-i18n-aria="summary">
+    <div class="kpi"><span class="label"><i data-lucide="wallet"></i><span data-i18n="kTotal"></span></span><span class="value" id="kTotal"></span><span class="note" id="kTotalNote"></span><span class="note" id="kYoy"></span></div>
+    <div class="kpi"><span class="label"><i data-lucide="calendar"></i><span data-i18n="kAvg"></span></span><span class="value" id="kAvg"></span><span class="note" id="kAvgNote"></span></div>
+    <div class="kpi"><span class="label"><i data-lucide="arrow-up-down"></i><span data-i18n="kCount"></span></span><span class="value" id="kCount"></span><span class="note" id="kCountNote"></span></div>
+    <div class="kpi"><span class="label"><i data-lucide="pie-chart"></i><span data-i18n="kCat"></span></span><span class="value" id="kCat" style="font-size:20px"></span><span class="note" id="kCatNote"></span></div>
+  </section>
+
+  <!-- GEMINI AI MERCHANT CATEGORIZER & SMART AUDIT PANEL -->
+  <section class="panel ai-panel is-minimized" id="expAiPanel">
+    <div class="panel-head" style="align-items:center">
+      <div class="ai-head-left" id="expAiHeadToggle" role="button" tabindex="0" aria-expanded="false" aria-controls="expAiBodyWrap">
+        <div class="ai-head-title-row">
+          <h2><i data-lucide="sparkles"></i><span data-i18n="aiTitle"></span></h2>
+          <span class="ai-last-check" id="expAiBadge"><i data-lucide="clock"></i><span id="expAiBadgeTxt"></span></span>
+        </div>
+        <span class="hint" id="expAiSub" data-i18n="aiSub"></span>
+      </div>
+      <button type="button" class="btn-ghost ai-min-btn" id="expAiMinBtn" aria-expanded="false" aria-controls="expAiBodyWrap">
+        <span id="expAiMinLbl" data-i18n="aiExpand"></span>
+        <i data-lucide="chevron-down" id="expAiMinIcon"></i>
+      </button>
+    </div>
+
+    <div class="ai-body-wrap" id="expAiBodyWrap" hidden>
+      <div class="ai-ctrls">
+        <div class="seg" id="expAiScopeSeg" role="group" aria-label="AI Categorization Mode">
+          <button type="button" data-scope="audit" aria-pressed="true"><i data-lucide="layers"></i><span data-i18n="aiScopeAudit"></span></button>
+          <button type="button" data-scope="other" aria-pressed="false"><i data-lucide="package"></i><span id="expAiOtherTabLbl"></span></button>
+          <button type="button" data-scope="advisor" aria-pressed="false"><i data-lucide="zap"></i><span data-i18n="aiScopeAdvisor"></span></button>
+        </div>
+        <div class="ai-actions">
+          <button type="button" class="btn-ghost" id="expAiResetBtn" hidden>
+            <i data-lucide="rotate-ccw"></i><span data-i18n="aiResetBtn"></span>
+          </button>
+          <button type="button" class="btn-ghost" id="expAiExportBtn">
+            <i data-lucide="download"></i><span data-i18n="aiExportBtn"></span>
+          </button>
+          <button type="button" class="btn-ghost" id="expAiKeyBtn" aria-expanded="false" aria-controls="expAiKeyForm">
+            <i data-lucide="key-round"></i><span id="expAiKeyBtnLbl" data-i18n="aiKeyBtn"></span>
+          </button>
+          <button type="button" class="btn-primary" id="expAiFetchBtn">
+            <i data-lucide="sparkles" id="expAiFetchIcon"></i><span id="expAiFetchLbl" data-i18n="aiFetchBtn"></span>
+          </button>
+        </div>
+      </div>
+
+      <form class="ai-key-box" id="expAiKeyForm" hidden>
+        <label for="expAiKeyInput" style="font-size:13px;font-weight:500" data-i18n="aiKeyLabel"></label>
+        <div class="ai-key-input-wrap">
+          <input type="password" id="expAiKeyInput" autocomplete="off" placeholder="AIzaSy...">
+          <button type="button" class="ai-key-toggle" id="expAiKeyToggle" aria-pressed="false" aria-label="Show API Key">
+            <i data-lucide="eye"></i>
+          </button>
+        </div>
+        <button type="submit" class="btn-primary" style="min-height:38px;padding:7px 14px"><i data-lucide="check"></i><span data-i18n="aiKeySave"></span></button>
+        <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="offer-link"><i data-lucide="external-link"></i><span>Google AI Studio</span></a>
+      </form>
+
+      <div class="ai-loader" id="expAiLoader" role="status" aria-live="polite" hidden>
+        <div class="ai-progress"><span></span></div>
+        <div class="ai-loader-body">
+          <i data-lucide="refresh-cw" class="spin"></i>
+          <span id="expAiLoaderTxt" data-i18n="aiLoading"></span>
+        </div>
+      </div>
+      <div class="ai-status" id="expAiStatus"></div>
+      <div class="exp-ai-grid" id="expAiGrid"></div>
+      <div class="ai-sources" id="expAiSources" hidden></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2><i data-lucide="bar-chart-3"></i><span id="chartTitle"></span></h2>
+      <div class="legend" id="chartLegend"><span><i class="dot" style="background:var(--alpha)"></i>Alpha Bank</span><span><i class="dot" style="background:var(--nbg)"></i>NBG</span><span><i class="dot" style="background:var(--areti)"></i>Alpha (Αρετή)</span></div>
+    </div>
+    <div class="chart" id="monthly"></div>
+    <p class="hint" style="margin:8px 0 0" id="chartHint"></p>
+  </section>
+
+  <div class="grid2">
+    <section class="panel">
+      <div class="panel-head"><h2><i data-lucide="layers"></i><span data-i18n="byCat"></span></h2><span class="hint" data-i18n="clickFilter"></span></div>
+      <div class="bars" id="cats"></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2><i data-lucide="store"></i><span data-i18n="topMerch"></span></h2><span class="hint" data-i18n="countTotal"></span></div>
+      <div class="bars" id="merchants"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><h2><i data-lucide="receipt"></i><span data-i18n="txTitle"></span></h2><span class="hint" id="txCount"></span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th><button type="button" data-sort="d"><span data-i18n="thDate"></span><i data-lucide="arrow-up-down"></i></button></th>
+          <th data-i18n="thMerchant"></th>
+          <th class="hide-sm" data-i18n="thCat"></th>
+          <th class="hide-sm" data-i18n="thCard"></th>
+          <th class="r"><button type="button" data-sort="a"><span data-i18n="thAmount"></span><i data-lucide="arrow-up-down"></i></button></th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="more"><button type="button" id="moreBtn"><i data-lucide="chevron-down"></i><span data-i18n="showMore"></span></button></div>
+  </section>
+
+  <p class="foot" data-i18n="foot"></p>
+</div>
+
+<script>
+const DATA = {"owner":"areti","cats":{"food":"Groceries & food","out":"Dining, cafés & entertainment","travel":"Travel, hotels & transport","bills":"Energy, water & telecom","ins":"Insurance & taxes","health":"Health","clothes":"Clothing & shoes","tech":"Electronics & e-shops","dept":"Home, books & stores","subs":"Subscriptions & digital","car":"Fuel & car","bet":"Betting & lottery","cash":"Cash withdrawals","other":"Other"},"tx":[{"d":"2026-10-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"FAIRYTALE CONCEPT STOR","c":"dept","a":10.1},{"d":"2026-10-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-10-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GIATRA MARIA","c":"other","a":18.0},{"d":"2026-10-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AFOI I ZAFEIRIOU OE","c":"dept","a":3.87},{"d":"2026-10-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":9.6},{"d":"2026-10-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":5.7},{"d":"2026-10-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-10-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"THANASIS","c":"food","a":1.1},{"d":"2026-10-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-10-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHRYSOSTOMOS KANAKAR","c":"food","a":3.0},{"d":"2026-10-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LOUKAS ARGYRAKOS","c":"food","a":4.0},{"d":"2026-10-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOULAIMIS EYAGGELOS","c":"food","a":5.0},{"d":"2026-10-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NIKOLAOS KLIRONOMOS","c":"food","a":10.0},{"d":"2026-10-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":6.6},{"d":"2026-10-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"JUMBO","c":"dept","a":47.68},{"d":"2026-10-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-10-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"THANASIS","c":"food","a":1.1},{"d":"2026-10-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VASILAKOS D KAI SIA OE","c":"food","a":12.3},{"d":"2026-10-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-10-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ISB HELLAS SA","c":"clothes","a":12.99},{"d":"2026-10-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":11.71},{"d":"2026-10-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ENTELVAIS A.T.T.V.E.G.","c":"food","a":4.5},{"d":"2026-10-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":7.0},{"d":"2026-10-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PAYPAL *UBERPAYMENT","c":"travel","a":4.06},{"d":"2026-10-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-10-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-10-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"G LIOSIS KAI SIA OE","c":"out","a":89.0},{"d":"2026-10-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-10-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GORIDARIS STERGIOS","c":"other","a":9.3},{"d":"2026-10-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":1.44},{"d":"2026-10-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"BAKLAVAS","c":"out","a":53.5},{"d":"2026-10-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KALLOU MIRANTA","c":"other","a":3.0},{"d":"2026-10-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"COS GR0003","c":"clothes","a":39.0},{"d":"2026-10-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-10-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"S P G B CAPITAL E E","c":"out","a":15.0},{"d":"2026-10-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-10-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":4.91},{"d":"2026-09-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TROPICAL NUTS","c":"food","a":4.42},{"d":"2026-09-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":13.99},{"d":"2026-09-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NEROPISTOLO EE","c":"out","a":2.8},{"d":"2026-09-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":1.2},{"d":"2026-09-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-09-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LIAKOS COMPANY","c":"food","a":16.07},{"d":"2026-09-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZIOGAS ILIAS","c":"food","a":2.4},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LATSIS IOANNIS","c":"food","a":7.0},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHARALABOS PAPOUTSIS","c":"food","a":6.3},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IEROTHEOS GKOSDIS","c":"food","a":4.3},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKANDALI MARIGO TOY IO","c":"food","a":7.5},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOULAIMIS EFSTATHI","c":"food","a":7.7},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LIAKOS COMPANY","c":"food","a":13.31},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLAVENITIS","c":"food","a":2.77},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":4.1},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VASILAKOS D KAI SIA OE","c":"food","a":7.4},{"d":"2026-09-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TROPICAL NUTS","c":"food","a":6.41},{"d":"2026-09-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":15.95},{"d":"2026-09-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":-10.95,"refund":true},{"d":"2026-09-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":-22.95,"refund":true},{"d":"2026-09-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"THANASIS","c":"food","a":1.7},{"d":"2026-09-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PINK WOMAN RIVER WEST","c":"clothes","a":5.09},{"d":"2026-09-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA","c":"clothes","a":22.95},{"d":"2026-09-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA","c":"clothes","a":23.9},{"d":"2026-09-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OYSHO","c":"clothes","a":26.09},{"d":"2026-09-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OYSHO","c":"clothes","a":22.99},{"d":"2026-09-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"RIVER WEST","c":"dept","a":28.88},{"d":"2026-09-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ANGELOPOULOSHAIR I.K.E","c":"dept","a":95.0},{"d":"2026-09-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"THANASIS","c":"food","a":6.1},{"d":"2026-09-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ANASTASIOS ANAS","c":"food","a":3.2},{"d":"2026-09-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TERRA FASHION","c":"clothes","a":13.09},{"d":"2026-09-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":2.1},{"d":"2026-09-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PRISMA YPERVASI GP","c":"dept","a":305.0},{"d":"2026-09-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"G LIOSIS KAI SIA OE","c":"out","a":89.0},{"d":"2026-09-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKROUTZ","c":"tech","a":26.86},{"d":"2026-09-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ATHINAIKES GEFSEIS","c":"out","a":4.3},{"d":"2026-09-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EDI PER MANIS E E","c":"other","a":28.0},{"d":"2026-09-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-09-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KOURTIS THEOFANIS","c":"other","a":12.5},{"d":"2026-08-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SIANOS STAVROS","c":"other","a":1.0},{"d":"2026-08-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"M PANTGAZIS KAI SIA OE","c":"other","a":31.0},{"d":"2026-08-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DS PORT IKE","c":"other","a":7.89},{"d":"2026-08-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NORTH WEST","c":"other","a":2.5},{"d":"2026-08-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NORTH WEST","c":"other","a":1.2},{"d":"2026-08-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PUBLIC SYNTAG 7010","c":"tech","a":7.7},{"d":"2026-08-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DOWNTOWN PHARMACY AND","c":"health","a":8.55},{"d":"2026-08-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP","c":"travel","a":5.6},{"d":"2026-08-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CALZEDONIA","c":"clothes","a":12.2},{"d":"2026-08-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TAXI21","c":"travel","a":3.0},{"d":"2026-08-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NEROPISTOLO EE","c":"out","a":10.8},{"d":"2026-08-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP","c":"travel","a":6.5},{"d":"2026-08-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"FOURNOS GIANNOULIS","c":"food","a":1.2},{"d":"2026-08-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PANOS VOGIATZIS AE","c":"health","a":7.95},{"d":"2026-08-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP","c":"travel","a":6.4},{"d":"2026-08-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MENTITERRA AEVESE","c":"out","a":2.6},{"d":"2026-08-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-08-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":4.86},{"d":"2026-08-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":2.96},{"d":"2026-08-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PAPAMANOU","c":"health","a":28.41},{"d":"2026-08-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TSIOPOS IKE","c":"out","a":82.8},{"d":"2026-08-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"STAMOU KONSTANTINO","c":"other","a":23.0},{"d":"2026-08-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"WONDER NEST RET MON. A","c":"dept","a":49.16},{"d":"2026-08-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KOKKINOS PANTHIR PAICH","c":"dept","a":10.97},{"d":"2026-08-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"WWW.PHARM24.GR","c":"health","a":63.16},{"d":"2026-08-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"BALEXCO GP","c":"out","a":1.5},{"d":"2026-08-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-08-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TSIOPOS IKE","c":"out","a":31.7},{"d":"2026-08-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PANOS VOGIATZIS AE","c":"health","a":15.95},{"d":"2026-08-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"HM","c":"clothes","a":-40.98,"refund":true},{"d":"2026-07-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SOYVLAKI APO KOYNIA","c":"out","a":13.9},{"d":"2026-07-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TINIAKOS","c":"food","a":5.99},{"d":"2026-07-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"FASHION FORWARD EPE","c":"clothes","a":12.99},{"d":"2026-07-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-07-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ISB HELLAS SA","c":"clothes","a":30.08},{"d":"2026-07-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TERRA FASHION","c":"clothes","a":3.99},{"d":"2026-07-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NO MAMAS BOY OE","c":"out","a":6.9},{"d":"2026-07-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"HM","c":"clothes","a":40.98},{"d":"2026-07-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"JYSK G041 ACADEMY","c":"dept","a":15.5},{"d":"2026-07-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DELIGIANNI IOULIA","c":"other","a":9.6},{"d":"2026-07-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PANOS VOGIATZIS AE","c":"health","a":17.95},{"d":"2026-07-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ART OF GRILL","c":"out","a":25.5},{"d":"2026-07-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"G LIOSIS KAI SIA OE","c":"out","a":69.0},{"d":"2026-07-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DYTIKO KIOSKI E E","c":"food","a":1.9},{"d":"2026-07-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHRISTINA SARANTI","c":"health","a":90.0},{"d":"2026-07-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":3.9},{"d":"2026-07-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-07-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS SA","c":"clothes","a":29.95},{"d":"2026-07-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"YPIRESIES ESTIASIS EST","c":"out","a":10.7},{"d":"2026-07-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"HONDOS CENTER","c":"dept","a":71.22},{"d":"2026-07-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"HONDOS CENTER","c":"dept","a":13.99},{"d":"2026-07-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SYSTEGAZOMENA FARM 1","c":"health","a":26.11},{"d":"2026-07-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KALOGRIOPOULOS ATH","c":"other","a":0.6},{"d":"2026-07-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"YPERASTIKO KTEL NOMOU","c":"travel","a":16.6},{"d":"2026-07-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":4.2},{"d":"2026-07-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SANTEE EE","c":"out","a":22.0},{"d":"2026-07-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ENTER SWEET","c":"food","a":6.6},{"d":"2026-07-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHRISTINA SARANTI","c":"health","a":80.0},{"d":"2026-07-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VEDERE IKE","c":"dept","a":16.5},{"d":"2026-07-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CH ZAMANIS M ATHANASIO","c":"out","a":16.8},{"d":"2026-07-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ART OF GRILL","c":"out","a":8.1},{"d":"2026-07-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-07-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"RESKOS NIKOLAOS","c":"food","a":3.5},{"d":"2026-06-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KOKKINAKIS MICHAIL STY","c":"food","a":2.0},{"d":"2026-06-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GEORGIOS FASSOS","c":"food","a":1.5},{"d":"2026-06-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KALOGIROU","c":"food","a":4.0},{"d":"2026-06-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"STAVROS KATSIFOLIS","c":"food","a":2.5},{"d":"2026-06-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-06-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"BALA KIKI","c":"other","a":14.5},{"d":"2026-06-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKECHERS","c":"clothes","a":128.91},{"d":"2026-06-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LIAKOS COMPANY","c":"food","a":9.82},{"d":"2026-06-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-06-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-06-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LIAKOS COMPANY","c":"food","a":18.77},{"d":"2026-06-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLAVENITIS","c":"food","a":23.87},{"d":"2026-06-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":5.0},{"d":"2026-06-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NIKOLAOS ZISIS","c":"other","a":62.1},{"d":"2026-06-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"YPERAGORA KREATON RIZO","c":"food","a":6.42},{"d":"2026-06-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":2.52},{"d":"2026-06-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VASILAKOS D KAI SIA OE","c":"food","a":10.4},{"d":"2026-06-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VERIGOS CHARILAOS","c":"food","a":9.0},{"d":"2026-06-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":6.3},{"d":"2026-06-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-06-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DRAGATSANIOU E E","c":"out","a":7.9},{"d":"2026-06-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS SA","c":"clothes","a":29.95},{"d":"2026-06-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"WONDER NEST RET MON. A","c":"dept","a":4.7},{"d":"2026-06-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-06-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":19.0},{"d":"2026-06-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MIKO SHOP","c":"clothes","a":59.0},{"d":"2026-06-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.2},{"d":"2026-06-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-06-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"N SAKELLARIS AE","c":"clothes","a":99.0},{"d":"2026-06-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"7010 SYNTAGMA","c":"dept","a":24.99},{"d":"2026-06-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DYTIKO KIOSKI E E","c":"food","a":3.0},{"d":"2026-06-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":2.8},{"d":"2026-06-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVGENIA PANAGOPOULOU","c":"food","a":8.5},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KALOGIROU","c":"food","a":9.0},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOULAIMIS EYAGGELOS","c":"food","a":5.0},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOUTOUPAS GEORGIOS TOY","c":"food","a":2.0},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNIS BINIARIS","c":"food","a":3.0},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":2.64},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":0.5},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VASILAKOS D K SIA OE","c":"food","a":10.89},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CALZEDONIA","c":"clothes","a":20.1},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":3.4},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ANASTASIOS ANAS","c":"food","a":2.2},{"d":"2026-06-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TERRA FASHION","c":"clothes","a":32.07},{"d":"2026-05-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KARAMANI PANAGIOTA","c":"other","a":0.5},{"d":"2026-05-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"YUZU SUSHI BAR","c":"out","a":60.0},{"d":"2026-05-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA.COM","c":"clothes","a":1.95},{"d":"2026-05-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ATTICA","c":"clothes","a":40.0},{"d":"2026-05-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LEGOS BASILIS","c":"food","a":5.1},{"d":"2026-05-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-05-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKROUTZ","c":"tech","a":38.41},{"d":"2026-05-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ROUTI DESPOINA","c":"other","a":37.0},{"d":"2026-05-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VERIGOS CHARILAOS","c":"food","a":14.4},{"d":"2026-05-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":3.5},{"d":"2026-05-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-05-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ANASTASIOS ANAS","c":"food","a":1.6},{"d":"2026-05-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PULL & BEAR","c":"clothes","a":-6.0,"refund":true},{"d":"2026-05-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TEZENIS ERMOY","c":"clothes","a":9.99},{"d":"2026-05-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EFOOD","c":"out","a":34.69},{"d":"2026-05-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":3.64},{"d":"2026-05-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":0.17},{"d":"2026-05-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":5.0},{"d":"2026-05-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PKS IKE","c":"out","a":3.0},{"d":"2026-05-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PKS IKE","c":"out","a":63.0},{"d":"2026-05-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":46.0},{"d":"2026-05-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-05-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LIAKOS COMPANY","c":"food","a":8.88},{"d":"2026-05-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":3.4},{"d":"2026-05-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":13.36},{"d":"2026-05-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS SA","c":"clothes","a":31.0},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"APOLLONION","c":"food","a":4.35},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MR PHONE TRADING C","c":"tech","a":5.9},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ARTOPIITIS PERISTE","c":"food","a":2.6},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZAKCRET SPORTS","c":"clothes","a":16.24},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":15.6},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZIOGAS ILIAS","c":"food","a":3.0},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"BEIS L. IOANNIS","c":"food","a":4.5},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOULAIMIS EYAGGELOS","c":"food","a":7.7},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNA PARAVA","c":"food","a":4.0},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"STEFANOS KATSAROS","c":"food","a":7.0},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KALOGIROU","c":"food","a":12.0},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"RESKOS NIKOLAOS","c":"food","a":4.0},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":4.4},{"d":"2026-05-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TROPICAL NUTS","c":"food","a":8.69},{"d":"2026-05-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CARPO PSYCHIKOU ANONYM","c":"food","a":10.41},{"d":"2026-05-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MEXIKANOS SOUTH EAST","c":"out","a":80.0},{"d":"2026-05-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"BERSHKA HELLAS","c":"clothes","a":5.99},{"d":"2026-05-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-05-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KOKKINOS PANTHIR PAICH","c":"dept","a":7.97},{"d":"2026-05-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PRISMA YPERVASI GP","c":"dept","a":380.0},{"d":"2026-05-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":5.0},{"d":"2026-05-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":20.0},{"d":"2026-05-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PEPCO 270013 ATHENS 6","c":"dept","a":6.0},{"d":"2026-05-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PEPCO 270013 ATHENS 6","c":"dept","a":5.0},{"d":"2026-05-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":8.0},{"d":"2026-05-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MANTIS ANGELOS NAM","c":"health","a":1.0},{"d":"2026-05-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":3.0},{"d":"2026-05-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ANASTASIOS ANAS","c":"food","a":1.8},{"d":"2026-05-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MAYRO ALATI PERISTER-4","c":"out","a":13.1},{"d":"2026-05-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CH ZAMANIS M ATHANASIO","c":"out","a":2.8},{"d":"2026-05-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"JD","c":"other","a":3.0},{"d":"2026-05-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SARANTI CHRISTINA","c":"health","a":15.0},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":1.9},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ANAST THEODORIDIS","c":"food","a":8.5},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VASILAKOS D KAI SIA OE","c":"food","a":3.7},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNIS GRAMMATIKAKI","c":"food","a":5.7},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNA KALANTZI","c":"food","a":11.5},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"RESKOS NIKOLAOS","c":"food","a":3.0},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOULAIMIS EYAGGELOS","c":"food","a":4.2},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KARLATIRAS VASILEIOS","c":"food","a":5.5},{"d":"2026-05-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOUTOUPAS GEORGIOS TOY","c":"food","a":9.0},{"d":"2026-05-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KAVALIS PETRO DEMIR","c":"other","a":1.0},{"d":"2026-05-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ASTERAKIA","c":"other","a":4.0},{"d":"2026-05-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KAVALIS PETRO DEMIR","c":"other","a":3.0},{"d":"2026-05-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KONTI ANTONIA","c":"food","a":7.9},{"d":"2026-05-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":5.0},{"d":"2026-05-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLAVENITIS","c":"food","a":10.69},{"d":"2026-05-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-05-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":5.0},{"d":"2026-04-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":7.62},{"d":"2026-04-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HOME HELLAS SA","c":"clothes","a":20.09},{"d":"2026-04-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DYTIKO KIOSKI E E","c":"food","a":2.6},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NK","c":"health","a":5.87},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":5.5},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VICKO","c":"dept","a":1.9},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VICKO","c":"dept","a":6.9},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TROPICAL NUTS","c":"food","a":7.76},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-04-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"THANASIS","c":"food","a":0.6},{"d":"2026-04-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KRITIKOU EVGENIA","c":"health","a":2.96},{"d":"2026-04-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":5.0},{"d":"2026-04-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AUTHENTIC FOODS SA","c":"out","a":9.27},{"d":"2026-04-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HOME","c":"clothes","a":19.99},{"d":"2026-04-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":9.05},{"d":"2026-04-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":12.12},{"d":"2026-04-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS SA","c":"clothes","a":26.05},{"d":"2026-04-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":1.9},{"d":"2026-04-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNIS GRAMMATIKAKI","c":"food","a":3.0},{"d":"2026-04-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GEORGIOS KLIRONOMOS","c":"food","a":1.8},{"d":"2026-04-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNA PARAVA","c":"food","a":2.5},{"d":"2026-04-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"BOGIATZIS IOANNIS","c":"food","a":2.0},{"d":"2026-04-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DOUKAS IOANNIS","c":"food","a":5.0},{"d":"2026-04-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-04-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"XENOKRATEIO ARCH MOUSE","c":"out","a":20.0},{"d":"2026-04-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DEMAJ SOFIJE","c":"other","a":15.0},{"d":"2026-04-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PAPPA PANAGIOTA","c":"other","a":20.2},{"d":"2026-04-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DIAMANTIS CHRISTOS","c":"other","a":16.9},{"d":"2026-04-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KTEL LIOSION","c":"travel","a":16.6},{"d":"2026-04-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":4.7},{"d":"2026-04-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"YPERASTIKO KTEL NOMOU","c":"travel","a":30.5},{"d":"2026-04-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-04-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DERMALIFE","c":"health","a":70.0},{"d":"2026-04-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CALZEDONIA","c":"clothes","a":6.0},{"d":"2026-04-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHARATSARIS","c":"other","a":10.0},{"d":"2026-04-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-04-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TINIAKOS","c":"food","a":2.73},{"d":"2026-04-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ATTICA","c":"clothes","a":18.85},{"d":"2026-04-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DYTIKO KIOSKI E E","c":"food","a":3.0},{"d":"2026-04-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ATTICA","c":"clothes","a":19.35},{"d":"2026-04-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"THANOU EIRINI","c":"out","a":3.4},{"d":"2026-04-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS SA","c":"clothes","a":26.05},{"d":"2026-04-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"HONDOS CENTER","c":"dept","a":4.32},{"d":"2026-04-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-04-01","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-03-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"FARMAKEIO ROZA EVANGEL","c":"health","a":6.27},{"d":"2026-03-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MD LASER CONCEPT","c":"health","a":50.0},{"d":"2026-03-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PLAISIO","c":"tech","a":0.87},{"d":"2026-03-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-03-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-03-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.2},{"d":"2026-03-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":1.9},{"d":"2026-03-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AXILEAS ZAFIRIOU","c":"food","a":4.6},{"d":"2026-03-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MANABIKH","c":"food","a":6.0},{"d":"2026-03-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNIS BINIARIS","c":"food","a":4.0},{"d":"2026-03-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP","c":"travel","a":5.67},{"d":"2026-03-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLAVENITIS","c":"food","a":3.85},{"d":"2026-03-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-03-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-03-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.2},{"d":"2026-03-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":41.48},{"d":"2026-03-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":4.4},{"d":"2026-03-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLAVENITIS","c":"food","a":3.1},{"d":"2026-03-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LIAKOS COMPANY","c":"food","a":8.41},{"d":"2026-03-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":2.2},{"d":"2026-03-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNIS GRAMMATIKAKI","c":"food","a":5.4},{"d":"2026-03-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.7},{"d":"2026-03-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":8.2},{"d":"2026-03-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-03-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI OE","c":"out","a":2.2},{"d":"2026-03-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLAVENITIS","c":"food","a":5.31},{"d":"2026-03-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":4.4},{"d":"2026-03-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PAYPAL *PHARMAKEIAT","c":"health","a":85.09},{"d":"2026-03-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-03-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KOKKINOS PANTHIR PAICH","c":"dept","a":2.77},{"d":"2026-03-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":4.4},{"d":"2026-03-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHALKIADAKIS LAMPR","c":"other","a":1.2},{"d":"2026-03-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP HELP.UBER.C","c":"travel","a":5.85},{"d":"2026-03-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VENPAY IVS","c":"out","a":3.0},{"d":"2026-03-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DUFRITAL 119 MXP T1","c":"travel","a":2.7},{"d":"2026-03-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AROMA NAPOLETANO","c":"out","a":8.4},{"d":"2026-03-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SUMUP *PIAZZALE EGEO","c":"out","a":1.5},{"d":"2026-03-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SUMUP *PIAZZALE EGEO","c":"out","a":5.4},{"d":"2026-03-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LINDT MILANO VIA DANTE","c":"food","a":16.07},{"d":"2026-03-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CLESS TICKET ATM","c":"travel","a":4.4},{"d":"2026-03-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MINUSCOLI SRL","c":"out","a":17.94},{"d":"2026-03-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ERBE SRL","c":"out","a":8.9},{"d":"2026-03-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ERBE SRL","c":"out","a":9.0},{"d":"2026-03-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LAFARMACIA CENTRALE VE","c":"health","a":4.75},{"d":"2026-03-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VERONA CAPPELLO","c":"travel","a":7.95},{"d":"2026-03-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LA BOTTEGA DEL TARTUFO","c":"food","a":30.0},{"d":"2026-03-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MALFINANCE S.R.L.","c":"out","a":5.0},{"d":"2026-03-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"A.T.V.","c":"travel","a":3.7},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NUOVA PIZZERIA MARCONI","c":"out","a":2.0},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ACETAIA GIUSTI SRL","c":"food","a":16.5},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"POLDO PANINI DEI SERVI","c":"out","a":23.16},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SCOUT SRL","c":"clothes","a":55.5},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"YAMAMAY","c":"clothes","a":20.25},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP","c":"travel","a":4.0},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PIAZZA GARIBALDI SNC","c":"food","a":1.5},{"d":"2026-03-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PIAZZA GARIBALDI SNC","c":"food","a":13.0},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DM-FIL. I02N","c":"dept","a":5.57},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SUMUP *BOX CAFFE DI P","c":"out","a":1.0},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SUMUP *BOX CAFFE DI P","c":"out","a":7.0},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"RAYBAN STORE BO382/F79","c":"clothes","a":128.8},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP","c":"travel","a":3.67},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SUMUP *LUNA S N C DI","c":"out","a":6.7},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"RAD SRL","c":"out","a":14.5},{"d":"2026-03-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"WHSMITH N1804","c":"out","a":2.8},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"UBER *TRIP","c":"travel","a":3.65},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MANTIS ANGELOS NAM","c":"health","a":23.06},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":8.0},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TROPICAL NUTS","c":"food","a":11.64},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ΑΝΑΛΗΨΗ ΜΕΤΡΗΤΩΝ","c":"cash","a":120.0},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ΑΝΑΛΗΨΗ ΜΕΤΡΗΤΩΝ","c":"cash","a":80.0},{"d":"2026-03-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":3.4},{"d":"2026-03-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.2},{"d":"2026-03-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":1.0},{"d":"2026-03-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":10.23},{"d":"2026-03-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":17.4},{"d":"2026-03-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GEORGIOS KARANTZAS","c":"food","a":4.0},{"d":"2026-03-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHOUREAL SYNTAGMATOS","c":"out","a":18.4},{"d":"2026-03-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PISSIAS D KAI SIA OE","c":"other","a":21.3},{"d":"2026-03-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-03-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DRAGATSANIOU E E","c":"out","a":13.6},{"d":"2026-03-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"POSIT KAPERONI VASILIK","c":"other","a":1.0},{"d":"2026-03-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.5},{"d":"2026-03-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":2.2},{"d":"2026-03-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":2.2},{"d":"2026-03-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-03-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PRISMA YPERVASI GP","c":"dept","a":190.0},{"d":"2026-03-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":4.16},{"d":"2026-03-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CUPAKI KOLONAKI","c":"out","a":2.2},{"d":"2026-03-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKROUTZ","c":"tech","a":22.79},{"d":"2026-03-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-03-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ON STAGE","c":"clothes","a":55.0},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOUTOUPAS GEORGIOS TOY","c":"food","a":1.0},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GEORGIOS KARANTZAS","c":"food","a":5.3},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNIS GRAMMATIKAKI","c":"food","a":3.6},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":0.24},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VASILAKOS D KAI SIA OE","c":"food","a":15.7},{"d":"2026-03-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":4.2},{"d":"2026-02-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CARPO","c":"food","a":12.96},{"d":"2026-02-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":24.0},{"d":"2026-02-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"O.D.A.P","c":"travel","a":40.0},{"d":"2026-02-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":3.8},{"d":"2026-02-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKROUTZ","c":"tech","a":52.64},{"d":"2026-02-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.2},{"d":"2026-02-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KRITIKOU EVGENIA","c":"health","a":2.2},{"d":"2026-02-25","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-02-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.2},{"d":"2026-02-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":5.87},{"d":"2026-02-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EVANTHIA PAPAMANOU K","c":"health","a":12.79},{"d":"2026-02-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"STAMOU KONSTANTINO","c":"other","a":8.5},{"d":"2026-02-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GALAXIAS","c":"food","a":10.04},{"d":"2026-02-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LAGOURA ELENI","c":"other","a":24.22},{"d":"2026-02-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLAVENITIS","c":"food","a":2.5},{"d":"2026-02-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KESSARIS PRAXIS","c":"health","a":200.0},{"d":"2026-02-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"INTERSPORT","c":"clothes","a":14.99},{"d":"2026-02-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"FASHION BAZAAR","c":"clothes","a":56.8},{"d":"2026-02-19","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-18","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB SHOP & GO","c":"food","a":0.35},{"d":"2026-02-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DABOV","c":"food","a":2.5},{"d":"2026-02-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":1.9},{"d":"2026-02-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ANASTASIOS ANAS","c":"food","a":0.8},{"d":"2026-02-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":4.7},{"d":"2026-02-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"DYTIKO KIOSKI E E","c":"food","a":2.9},{"d":"2026-02-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":39.95},{"d":"2026-02-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS SA","c":"clothes","a":25.95},{"d":"2026-02-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS SA","c":"clothes","a":80.05},{"d":"2026-02-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KESSARIS PRAXIS","c":"health","a":100.0},{"d":"2026-02-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"EFOOD","c":"out","a":8.69},{"d":"2026-02-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-02-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":3.7},{"d":"2026-02-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KOKKINOS PANTHIR PAICH","c":"dept","a":8.23},{"d":"2026-02-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"RED MEAT AE","c":"food","a":27.5},{"d":"2026-02-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":4.6},{"d":"2026-02-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KARADIMAS DIMITRIO","c":"other","a":0.5},{"d":"2026-02-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":0.9},{"d":"2026-02-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.2},{"d":"2026-02-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":4.42},{"d":"2026-02-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-02-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"FARMAKEIO A EMMANOUI","c":"health","a":59.92},{"d":"2026-02-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PRISMA YPERVASI GP","c":"dept","a":190.0},{"d":"2026-02-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OPTIONS ESCAPE 5","c":"out","a":4.2},{"d":"2026-01-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-01-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":1.9},{"d":"2026-01-31","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"THANASIS","c":"food","a":4.2},{"d":"2026-01-30","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"LIAKOS COMPANY","c":"food","a":19.11},{"d":"2026-01-29","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":2.7},{"d":"2026-01-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AB_ILION","c":"food","a":2.39},{"d":"2026-01-28","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-27","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TROPICAL NUTS","c":"food","a":7.19},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA.COM","c":"clothes","a":62.9},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":1.9},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOUTOUPAS GEORGIOS TOY","c":"food","a":5.0},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IOANNIS GRAMMATIKAKI","c":"food","a":3.8},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"NIKOLAOS KLIRONOMOS","c":"food","a":3.4},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MOULAIMIS EYAGGELOS","c":"food","a":6.0},{"d":"2026-01-26","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KARLATIRAS VASILEIOS","c":"food","a":14.0},{"d":"2026-01-24","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":5.8},{"d":"2026-01-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":-4.0,"refund":true},{"d":"2026-01-23","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-22","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":4.5},{"d":"2026-01-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-21","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":40.05},{"d":"2026-01-20","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AUTHENTIC FOODS","c":"out","a":13.75},{"d":"2026-01-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"AUTHENTIC FOODS","c":"out","a":2.9},{"d":"2026-01-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HOME","c":"clothes","a":22.99},{"d":"2026-01-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ZARA HELLAS","c":"clothes","a":42.88},{"d":"2026-01-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"MASSIMO DUTTI GOLDEN H","c":"clothes","a":110.0},{"d":"2026-01-17","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KOKKINOS PANTHIR PAICH","c":"dept","a":6.99},{"d":"2026-01-16","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKROUTZ","c":"tech","a":46.1},{"d":"2026-01-15","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ALEBRI CAFE BOULANGERI","c":"out","a":6.1},{"d":"2026-01-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"ON STAGE","c":"clothes","a":55.0},{"d":"2026-01-14","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-13","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"GKIZINOU ALEXANDRA","c":"other","a":2.0},{"d":"2026-01-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"TRATARO","c":"food","a":1.9},{"d":"2026-01-12","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"KRITIKOU EVGENIA","c":"health","a":8.36},{"d":"2026-01-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"VOUTSAS HOME GR","c":"dept","a":55.3},{"d":"2026-01-11","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"O FOURNOS TOU KARRA","c":"food","a":6.2},{"d":"2026-01-10","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PRISMA YPERVASI GP","c":"dept","a":190.0},{"d":"2026-01-09","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-08","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-07","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PASSARELLA","c":"clothes","a":37.35},{"d":"2026-01-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKLIRAKIS EMMANOUIL","c":"other","a":3.8},{"d":"2026-01-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":2.0},{"d":"2026-01-06","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"IL TOTO ILIOU 26 ILI","c":"bet","a":4.4},{"d":"2026-01-05","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-04","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"SKROUTZ","c":"tech","a":27.0},{"d":"2026-01-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"OASA ETICKET POS","c":"travel","a":27.0},{"d":"2026-01-03","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"PREKAS PANAGIOTIS KA","c":"out","a":2.2},{"d":"2026-01-02","bank":"Alpha (Αρετή)","src":"Debit ·9156 (Αρετή)","p":"areti","m":"CHARALABOU IOANNA","c":"other","a":15.4}]};
+const CATS = DATA.cats, TX = DATA.tx;
+const IS_ARETI_PAGE = DATA.owner === "areti";
+const BANKS = IS_ARETI_PAGE
+  ? [["Alpha (Αρετή)", "--areti"]]
+  : [["Alpha Bank", "--alpha"], ["NBG", "--nbg"], ["Alpha (Αρετή)", "--areti"]];
+
+// ---- Language: Greek and English. The choice is shared with the hub page and the groceries page. ----
+const T = {
+  el: {
+    title: IS_ARETI_PAGE ? "Έξοδα Αρετής" : "Έξοδα τραπεζών",
+    h1: IS_ARETI_PAGE ? "Έξοδα Αρετής" : "Έξοδα τραπεζών",
+    filters: "Φίλτρα", year: "Έτος", bank: "Τράπεζα", month: "Μήνας", summary: "Σύνοψη",
+    ownerAll: "Όλοι", ownerArgiris: "Αργύρης", ownerAreti: "Αρετή",
+    bothBanks: "Όλες", allYears: "Όλα τα έτη", allMonths: "Όλοι οι μήνες", showOlderYears: r => `Εμφάνιση (${r})`, hideOlderYears: "Απόκρυψη", qfAll: "Όλες", qfBig: "≥ 50 €", qfBills: "Πάγια & Συνδρομές", qfRefund: "Επιστροφές", resetAll: "Καθαρισμός όλων",
+    searchPh: "Αναζήτηση εμπόρου, π.χ. DABOV", searchAria: "Αναζήτηση εμπόρου",
+    kTotal: "Σύνολο εξόδων", kAvg: "Μέσος όρος ανά μήνα", kCount: "Κινήσεις", kCat: "Μεγαλύτερη κατηγορία",
+    byCat: "Ανά κατηγορία", clickFilter: "πατήστε για φίλτρο", topMerch: "Κορυφαίοι έμποροι", countTotal: "πατήστε για φίλτρο · φορές",
+    txTitle: "Κινήσεις", thDate: "Ημερομηνία", thMerchant: "Έμπορος", thCat: "Κατηγορία", thCard: "Κάρτα / λογαριασμός", thAmount: "Ποσό", showMore: "Περισσότερες",
+    foot: IS_ARETI_PAGE
+      ? "Από τα statements κινήσεων χρεωστικής κάρτας Alpha Bank (Debit Mastercard ·9156) της Αρετής. Οι καταθέσεις μετρητών ATM εξαιρούνται ως μεταφορές, ενώ οι επιστροφές προϊόντων καταγράφονται αρνητικά."
+      : "Από τα μηνιαία statements καρτών (PDF) της Alpha Bank και της Εθνικής καθώς και τις κινήσεις της χρεωστικής κάρτας της Αρετής. Κάθε statement ελέγχθηκε με το δικό του υπόλοιπο. Οι εξοφλήσεις καρτών, οι καταθέσεις ATM και οι φορτώσεις Revolut δεν μετράνε, γιατί είναι μεταφορές και όχι έξοδα.",
+    range: (a, b, n) => `${a} – ${b} · ${n} κινήσεις καρτών και λογαριασμών`, noTx: "Δεν υπάρχουν κινήσεις για αυτό το έτος",
+    yoy: (arrow, p, prev, y) => `${arrow} σε σχέση με ${prev} την ίδια περίοδο του ${y}`,
+    pickAll: "Επιλέξτε όλους τους μήνες", overMonths: n => `σε ${n} μήνες`, perPurchase: v => `μέσο ${v} ανά αγορά`, ofSpend: (v, p) => `${v} · ${p}% των εξόδων`,
+    byYear: "Έξοδα ανά έτος", byMonth: y => `Έξοδα ανά μήνα, ${y}`, clickYear: "Πατήστε ένα έτος για να το ανοίξετε.", clickMonth: "Πατήστε έναν μήνα για φίλτρο.",
+    dataTo: d => ` Δεδομένα έως ${d}.`, totalTx: n => `Σύνολο · ${n} κιν.`, chartAria: "Έξοδα στοιβαγμένα ανά τράπεζα",
+    noSpend: "Κανένα έξοδο με αυτά τα φίλτρα.", noMerch: "Κανένας έμπορος με αυτά τα φίλτρα.", shown: (n, v) => `${n} κινήσεις · ${v}`, refund: "επιστροφή",
+    clear: l => `Αφαίρεση φίλτρου ${l}`, k: "χ",
+    cats: {
+      food: "Σούπερ μάρκετ & τρόφιμα", out: "Εστίαση, καφέ & διασκέδαση", travel: "Ταξίδια, ξενοδοχεία & μετακινήσεις",
+      bills: "Ενέργεια, νερό & τηλεπικοινωνίες", ins: "Ασφάλειες & φόροι", clothes: "Ένδυση & υπόδηση",
+      health: "Υγεία", dept: "Σπίτι, βιβλία & πολυκαταστήματα", tech: "Ηλεκτρονικά & e-shops", subs: "Συνδρομές & ψηφιακές υπηρεσίες",
+      car: "Καύσιμα & αυτοκίνητο", bet: "Στοίχημα & λοταρίες", cash: "Αναλήψεις μετρητών", other: "Άλλα"
+    },
+    aiTitle: "AI Κατηγοριοποίηση Εμπόρων & Έλεγχος Πάγιων (Gemini)",
+    aiSub: "Αυτόματος καθαρισμός των «Άλλων», κατηγοριοποίηση εμπόρων με ΓΕΜΗ & live αναγνώριση μέσω Gemini AI",
+    aiExpand: "Εμφάνιση", aiMinimize: "Ελαχιστοποίηση",
+    aiScopeAudit: "Διορθώσεις & Νέες Κατηγορίες",
+    aiScopeOther: (n, v) => `Αμφίβολοι στα «Άλλα» (${n} · ${v})`,
+    aiScopeAdvisor: "AI Σύμβουλος Πάγιων & Συνδρομών",
+    aiKeyBtn: "API Key", aiKeySavedBtn: "API Key ✓",
+    aiExportBtn: "Εξαγωγή JSON", aiResetBtn: "Επαναφορά",
+    aiFetchBtn: "Αναγνώριση με Gemini AI", aiFetchAdvisorBtn: "Έλεγχος Πάγιων με Gemini AI",
+    aiKeyLabel: "Gemini API Key (κοινό με Σούπερ Μάρκετ):", aiKeySave: "Αποθήκευση",
+    aiLoading: "Το Gemini αναζητά στοιχεία εμπόρων (ΓΕΜΗ / Web) και προτείνει κατηγοριοποίηση…",
+    aiAuditStatus: "Βασικές ανακατηγοριοποιήσεις που καθάρισαν τα «Άλλα» και την «Εστίαση». Μπορείτε να αλλάξετε κατηγορία σε κάθε έμπορο:",
+    aiOtherStatus: (n, v) => `Απομένουν ${n} έμποροι (κυρίως ονοματεπώνυμα POS) συνολικής αξίας ${v} στα «Άλλα». Επιλέξτε κατηγορία ή πατήστε «Αναγνώριση με Gemini AI»:`,
+    aiAdvisorStatus: "Ανάλυση πάγιων υποχρεώσεων, ενέργειας, τηλεπικοινωνιών, ασφαλειών & ψηφιακών συνδρομών από τις κάρτες σας:",
+    aiFilterBtn: "Κινήσεις", aiApplyBtn: "Εφαρμογή AI:",
+    aiBadgeTxt: (v, p) => `«Άλλα»: ${v} (${p}%)`,
+    aiSourcesLbl: "Πηγές αναζήτησης:",
+    months: ["Ιαν","Φεβ","Μαρ","Απρ","Μαΐ","Ιουν","Ιουλ","Αυγ","Σεπ","Οκτ","Νοε","Δεκ"], locale: "el-GR",
+  },
+  en: {
+    title: IS_ARETI_PAGE ? "Areti's Expenses" : "Household Expenses",
+    h1: IS_ARETI_PAGE ? "Areti's Expenses" : "Household Expenses",
+    filters: "Filters", year: "Year", bank: "Bank", month: "Month", summary: "Summary",
+    ownerAll: "All", ownerArgiris: "Argyris", ownerAreti: "Areti",
+    bothBanks: "All", allYears: "All", allMonths: "All months", showOlderYears: r => `Show (${r})`, hideOlderYears: "Hide", qfAll: "All", qfBig: "≥ €50", qfBills: "Bills & Subscriptions", qfRefund: "Refunds", resetAll: "Reset all",
+    searchPh: "Search merchant, e.g. DABOV", searchAria: "Search merchant",
+    kTotal: "Total spent", kAvg: "Monthly average", kCount: "Transactions", kCat: "Biggest category",
+    byCat: "By category", clickFilter: "Click to filter", topMerch: "Top merchants", countTotal: "Click to filter · count",
+    txTitle: "Transactions", thDate: "Date", thMerchant: "Merchant", thCat: "Category", thCard: "Card / account", thAmount: "Amount", showMore: "Show more",
+    foot: IS_ARETI_PAGE
+      ? "Built from Areti's Alpha Bank Debit Mastercard (·9156) statement exports. ATM cash deposits are excluded as transfers, and product returns count as negative amounts."
+      : "Built from the monthly card statements (PDF) of Alpha Bank and NBG plus Areti's debit card exports. Card payoffs, ATM deposits and Revolut top-ups are left out because they are transfers, not spending.",
+    range: (a, b, n) => `${a} – ${b} · ${n} card and account transactions`, noTx: "No transactions loaded for this year",
+    yoy: (arrow, p, prev, y) => `${arrow} vs ${prev} same period ${y}`,
+    pickAll: "Pick all months to see it", overMonths: n => `over ${n} months`, perPurchase: v => `avg ${v} per purchase`, ofSpend: (v, p) => `${v} · ${p}% of spend`,
+    byYear: "Spending by year", byMonth: y => `Spending by month, ${y}`, clickYear: "Click a year to open it.", clickMonth: "Click a month to filter.",
+    dataTo: d => ` Data runs to ${d}.`, totalTx: n => `Total · ${n} tx`, chartAria: "Spending stacked by bank",
+    noSpend: "No spending matches these filters.", noMerch: "No merchants match these filters.", shown: (n, v) => `${n} shown · ${v}`, refund: "refund",
+    clear: l => `Clear ${l} filter`, k: "k",
+    cats: null,
+    aiTitle: "AI Merchant Categorizer & Bills Audit (Gemini)",
+    aiSub: "Automatic 'Other' cleanup, registry lookups & live AI merchant classification",
+    aiExpand: "Expand", aiMinimize: "Minimize",
+    aiScopeAudit: "AI Audit & Re-categorizations",
+    aiScopeOther: (n, v) => `Unresolved in 'Other' (${n} · ${v})`,
+    aiScopeAdvisor: "AI Bills & Subscriptions Advisor",
+    aiKeyBtn: "API Key", aiKeySavedBtn: "API Key ✓",
+    aiExportBtn: "Export JSON", aiResetBtn: "Reset overrides",
+    aiFetchBtn: "Classify with Gemini AI", aiFetchAdvisorBtn: "Analyze Bills with Gemini AI",
+    aiKeyLabel: "Gemini API Key (shared with Supermarket):", aiKeySave: "Save",
+    aiLoading: "Gemini is searching business registries & web to classify merchants…",
+    aiAuditStatus: "Key re-categorizations that cleaned up 'Other'. You can override any merchant's category below:",
+    aiOtherStatus: (n, v) => `${n} merchants (mostly person-named POS terminals) totaling ${v} remain in 'Other'. Pick a category or click 'Classify with Gemini AI':`,
+    aiAdvisorStatus: "Analysis of recurring bills, energy, telecom, insurance & digital subscriptions across your cards:",
+    aiFilterBtn: "Filter tx", aiApplyBtn: "Apply AI:",
+    aiBadgeTxt: (v, p) => `'Other': ${v} (${p}%)`,
+    aiSourcesLbl: "Search sources:",
+    months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], locale: "en-IE",
+  },
+};
+const LUCIDE = {
+  "credit-card": '<rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/>',
+  "wallet": '<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
+  "calendar": '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+  "arrow-up-down": '<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>',
+  "pie-chart": '<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>',
+  "bar-chart-3": '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  "layers": '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  "store": '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7"/>',
+  "receipt": '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+  "chevron-left": '<path d="m15 18-6-6 6-6"/>',
+  "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+  "chevrons-left": '<path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/>',
+  "chevrons-right": '<path d="m6 17 5-5-5-5"/><path d="m13 17 5-5-5-5"/>',
+  "search": '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  "chevron-up": '<path d="m18 15-6-6-6 6"/>',
+  "trending-up": '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+  "trending-down": '<polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/>',
+  "x": '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  "shopping-cart": '<circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>',
+  "utensils": '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+  "plane": '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+  "zap": '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  "shield": '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
+  "shirt": '<path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/>',
+  "heart-pulse": '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/>',
+  "shopping-bag": '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  "cpu": '<rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/>',
+  "tv": '<rect width="20" height="15" x="2" y="7" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/>',
+  "car": '<path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/>',
+  "dice-5": '<rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M16 8h.01"/><path d="M8 8h.01"/><path d="M8 16h.01"/><path d="M16 16h.01"/><path d="M12 12h.01"/>',
+  "banknote": '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+  "package": '<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/>',
+  "sparkles": '<path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/>',
+  "key-round": '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+  "eye": '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  "eye-off": '<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>',
+  "refresh-cw": '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  "external-link": '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  "check": '<path d="M20 6 9 17l-5-5"/>',
+  "clock": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  "download": '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  "rotate-ccw": '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>'
+};
+const CAT_ICONS = { food: "shopping-cart", out: "utensils", travel: "plane", bills: "zap", ins: "shield", clothes: "shirt", health: "heart-pulse", dept: "shopping-bag", tech: "cpu", subs: "tv", car: "car", bet: "dice-5", cash: "banknote", other: "package" };
+const ico = (name, cls = "") => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="lucide lucide-${name} ${cls}" aria-hidden="true">${LUCIDE[name] || ""}</svg>`;
+function renderLucide() {
+  document.querySelectorAll("i[data-lucide]").forEach(el => {
+    const n = el.getAttribute("data-lucide");
+    const idAttr = el.id ? ` id="${el.id}"` : "";
+    if (LUCIDE[n]) el.outerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"${idAttr} class="lucide lucide-${n} ${el.className || ""}" aria-hidden="true">${LUCIDE[n]}</svg>`;
+  });
+}
+
+let LANG = "el";
+try { LANG = localStorage.getItem("fin-lang") || "el"; } catch (e) {}
+if (!T[LANG]) LANG = "el";
+const t = (k, ...a) => { const v = T[LANG][k]; return typeof v === "function" ? v(...a) : v; };
+const catName = c => (T[LANG].cats && T[LANG].cats[c]) || CATS[c] || c;
+let MONTHS, eur, eur2;
+function setFormats() {
+  MONTHS = T[LANG].months;
+  eur = new Intl.NumberFormat(T[LANG].locale, { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+  eur2 = new Intl.NumberFormat(T[LANG].locale, { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
+}
+
+// Custom user / AI merchant category overrides (persisted in localStorage)
+let customCats = {};
+try { customCats = JSON.parse(localStorage.getItem("hx-custom-cats") || "{}") || {}; } catch (e) {}
+let aiSuggestedCats = {};
+try { aiSuggestedCats = JSON.parse(localStorage.getItem("hx-ai-suggestions") || "{}") || {}; } catch (e) {}
+const txCat = row => customCats[row.m] || row.c;
+
+function setMerchantCat(merchant, newCat) {
+  const baseCat = (TX.find(r => r.m === merchant) || {}).c || "other";
+  if (!newCat || newCat === baseCat) delete customCats[merchant];
+  else customCats[merchant] = newCat;
+  try { localStorage.setItem("hx-custom-cats", JSON.stringify(customCats)); } catch (e) {}
+  render();
+}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const monthLabel = k => MONTHS[+k.slice(5) - 1] + " " + k.slice(0, 4);
+const fmtDate = d => +d.slice(8) + " " + MONTHS[+d.slice(5, 7) - 1];
+const fmtK = v => v >= 1000 ? (v / 1000).toLocaleString(T[LANG].locale, { maximumFractionDigits: 1 }) + t("k") : String(Math.round(v));
+const sum = arr => arr.reduce((s, t) => s + t.a, 0);
+
+const YEARS = [...new Set(TX.map(t => t.d.slice(0, 4)))].sort();
+const LAST = TX.reduce((m, t) => t.d > m ? t.d : m, "");
+const monthsWithData = y => [...new Set(TX.filter(t => (!y || t.d.startsWith(y)) && (state.owner === "all" || (t.p || "argiris") === state.owner)).map(t => t.d.slice(0, 7)))].sort();
+
+const STORAGE_FILTERS_KEY = IS_ARETI_PAGE ? "hx-filters-areti" : "hx-filters";
+const state = { year: YEARS[YEARS.length - 1], owner: IS_ARETI_PAGE ? "areti" : "all", bank: "all", month: "", cat: "", quick: "all", q: "", sort: "d", dir: -1, shown: 60 };
+try {
+  const s = JSON.parse(localStorage.getItem(STORAGE_FILTERS_KEY) || "{}");
+  if (!IS_ARETI_PAGE && ["all", "argiris", "areti"].includes(s.owner)) state.owner = s.owner;
+  if (s.bank) state.bank = s.bank;
+  if (s.year === "" || YEARS.includes(s.year)) state.year = s.year;
+} catch (e) {}
+
+function applyStatic() {
+  document.documentElement.lang = LANG;
+  document.title = t("title");
+  renderLucide();
+  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => el.placeholder = t(el.dataset.i18nPh));
+  document.querySelectorAll("[data-i18n-aria]").forEach(el => el.setAttribute("aria-label", t(el.dataset.i18nAria)));
+  if (IS_ARETI_PAGE) {
+    $("sourcesWrap").innerHTML = `<span class="src"><i class="dot" style="background:var(--areti)"></i>Alpha Bank · Debit Mastercard ·9156</span>`;
+    $("chartLegend").innerHTML = `<span><i class="dot" style="background:var(--areti)"></i>Alpha Bank · Debit ·9156</span>`;
+  }
+}
+window.setLang = l => {
+  if (!T[l]) return;
+  LANG = l;
+  try { localStorage.setItem("fin-lang", l); } catch (e) {}
+  setFormats(); applyStatic(); renderYearSeg(); render();
+};
+window.setOwnerFilter = o => {
+  if (IS_ARETI_PAGE || !["all", "argiris", "areti"].includes(o)) return;
+  state.owner = o;
+  state.bank = "all";
+  state.shown = 60;
+  render();
+};
+
+let yearSegExpanded = false;
+function renderYearSeg() {
+  const recent = YEARS.slice(-2);
+  const older = YEARS.slice(0, -2);
+  const hasDrill = YEARS.length > 1;
+  const drillLbl = older.length ? `${older[0]}–${older[older.length - 1]}` : t("allYears");
+  const tip = yearSegExpanded ? t("hideOlderYears") : t("showOlderYears", drillLbl);
+  let html = "";
+  if (hasDrill) {
+    if (yearSegExpanded) {
+      html += `<button type="button" class="year-drill is-open" data-drill="1" aria-expanded="true" title="${esc(tip)}" aria-label="${esc(tip)}">${ico("chevrons-right")}</button>`;
+      html += `<button type="button" class="year-old" data-year="" aria-pressed="${state.year === ""}">${t("allYears")}</button>`;
+      html += older.map(y => `<button type="button" class="year-old" data-year="${y}" aria-pressed="${y === state.year}">${y}</button>`).join("");
+    } else {
+      html += `<button type="button" class="year-drill" data-drill="1" aria-expanded="false" title="${esc(tip)}" aria-label="${esc(tip)}">${ico("chevrons-left")}<span>${esc(drillLbl)}</span></button>`;
+      if (state.year === "") {
+        html += `<button type="button" class="year-old" data-year="" aria-pressed="true">${t("allYears")}</button>`;
+      } else if (older.includes(state.year)) {
+        html += `<button type="button" class="year-old" data-year="${state.year}" aria-pressed="true">${state.year}</button>`;
+      }
+    }
+  }
+  html += recent.map(y => `<button type="button" data-year="${y}" aria-pressed="${y === state.year}">${y}</button>`).join("");
+  $("yearSeg").innerHTML = html;
+}
+
+const BILL_CATS = new Set(["bills", "ins", "subs"]);
+function passQuick(row, qMode = state.quick) {
+  if (!qMode || qMode === "all") return true;
+  if (qMode === "big") return row.a >= 50;
+  if (qMode === "bills") return BILL_CATS.has(txCat(row));
+  if (qMode === "refund") return row.a < 0;
+  return true;
+}
+
+function filtered(skip) {
+  const q = state.q.trim().toUpperCase();
+  return TX.filter(t =>
+    (!state.year || t.d.startsWith(state.year)) &&
+    (skip === "owner" || state.owner === "all" || (t.p || "argiris") === state.owner) &&
+    (skip === "bank" || state.bank === "all" || t.bank === state.bank) &&
+    (skip === "month" || !state.month || t.d.startsWith(state.month)) &&
+    (skip === "cat" || !state.cat || txCat(t) === state.cat) &&
+    (skip === "quick" || passQuick(t)) &&
+    (!q || t.m.includes(q)));
+}
+
+// Months covered, counting the final data month as a fraction (e.g. 16 of 31 days).
+function monthSpan(keys) {
+  const lastKey = LAST.slice(0, 7), dim = new Date(+LAST.slice(0, 4), +LAST.slice(5, 7), 0).getDate();
+  return keys.reduce((s, m) => s + (m === lastKey ? +LAST.slice(8) / dim : 1), 0);
+}
+
+function renderHeader() {
+  $("yearTitle").textContent = state.year || `${YEARS[0]}–${YEARS[YEARS.length - 1]}`;
+  const inScope = TX.filter(t => (!state.year || t.d.startsWith(state.year)) && (state.owner === "all" || (t.p || "argiris") === state.owner));
+  const lo = inScope.reduce((m, t) => t.d < m ? t.d : m, LAST), hi = inScope.reduce((m, t) => t.d > m ? t.d : m, "");
+  $("range").textContent = inScope.length ? t("range", `${fmtDate(lo)} ${lo.slice(0, 4)}`, `${fmtDate(hi)} ${hi.slice(0, 4)}`, inScope.length) : t("noTx");
+  renderYearSeg();
+
+  const ownerSeg = $("ownerSeg");
+  if (IS_ARETI_PAGE) {
+    ownerSeg.hidden = true;
+  } else {
+    ownerSeg.hidden = false;
+    const baseForOwner = filtered("owner");
+    const cntArg = baseForOwner.filter(r => (r.p || "argiris") === "argiris").length;
+    const cntAre = baseForOwner.filter(r => r.p === "areti").length;
+    ownerSeg.innerHTML = `
+      <button type="button" data-owner="all" aria-pressed="${state.owner === "all"}">${t("ownerAll")} <span class="seg-cnt">${baseForOwner.length}</span></button>
+      <button type="button" data-owner="argiris" aria-pressed="${state.owner === "argiris"}"><i class="dot" style="background:var(--alpha)"></i>${t("ownerArgiris")} <span class="seg-cnt">${cntArg}</span></button>
+      <button type="button" data-owner="areti" aria-pressed="${state.owner === "areti"}"><i class="dot" style="background:var(--areti)"></i>${t("ownerAreti")} <span class="seg-cnt">${cntAre}</span></button>`;
+  }
+
+  const ms = monthsWithData(state.year);
+  const mCtrl = $("monthCtrl");
+  const sel = $("monthSel");
+  mCtrl.hidden = !state.year;
+  mCtrl.classList.toggle("is-active", !!state.month);
+  const baseForMonth = filtered("month");
+  sel.innerHTML = `<option value="">${t("allMonths")} (${baseForMonth.length})</option>` + ms.map(m => {
+    const mRows = baseForMonth.filter(r => r.d.startsWith(m));
+    const mSum = sum(mRows);
+    return `<option value="${m}">${monthLabel(m)} · ${mRows.length} (${eur.format(mSum)})</option>`;
+  }).join("");
+  sel.value = state.month;
+  const idx = ms.indexOf(state.month);
+  $("monthPrev").disabled = ms.length === 0 || (state.month !== "" && idx <= 0);
+  $("monthNext").disabled = ms.length === 0 || state.month === "";
+
+  const bankSeg = $("bankSeg");
+  if (IS_ARETI_PAGE || state.owner === "areti") {
+    bankSeg.hidden = true;
+  } else {
+    bankSeg.hidden = false;
+    const baseForBank = filtered("bank");
+    const cntAlpha = baseForBank.filter(r => r.bank === "Alpha Bank").length;
+    const cntNbg = baseForBank.filter(r => r.bank === "NBG").length;
+    const cntAreti = baseForBank.filter(r => r.bank === "Alpha (Αρετή)").length;
+    bankSeg.innerHTML = `
+      <button type="button" data-bank="all" aria-pressed="${state.bank === "all"}">${t("bothBanks")} <span class="seg-cnt">${baseForBank.length}</span></button>
+      <button type="button" data-bank="Alpha Bank" aria-pressed="${state.bank === "Alpha Bank"}"><i class="dot" style="background:var(--alpha)"></i>Alpha <span class="seg-cnt">${cntAlpha}</span></button>
+      <button type="button" data-bank="NBG" aria-pressed="${state.bank === "NBG"}"><i class="dot" style="background:var(--nbg)"></i>NBG <span class="seg-cnt">${cntNbg}</span></button>` +
+      (state.owner === "all" && cntAreti ? `<button type="button" data-bank="Alpha (Αρετή)" aria-pressed="${state.bank === "Alpha (Αρετή)"}"><i class="dot" style="background:var(--areti)"></i>Αρετή <span class="seg-cnt">${cntAreti}</span></button>` : "");
+  }
+}
+
+function renderKpis(rows) {
+  const total = sum(rows);
+  $("kTotal").textContent = eur.format(total);
+  const byBank = BANKS.map(([b]) => [b, sum(rows.filter(t => t.bank === b))]).filter(x => x[1]);
+  $("kTotalNote").textContent = byBank.map(([b, v]) => `${b} ${eur.format(v)}`).join(" · ");
+
+  // Same period of the previous year, when that year is loaded.
+  const prevY = state.year && String(+state.year - 1);
+  let yoy = "";
+  if (prevY && YEARS.includes(prevY)) {
+    const cut = state.year === LAST.slice(0, 4) ? LAST.slice(5) : "12-31";
+    const q = state.q.trim().toUpperCase();
+    const prev = sum(TX.filter(t => t.d.startsWith(prevY) && t.d.slice(5) <= cut &&
+      (state.owner === "all" || (t.p || "argiris") === state.owner) &&
+      (state.bank === "all" || t.bank === state.bank) &&
+      (!state.month || t.d.slice(5, 7) === state.month.slice(5)) &&
+      (!state.cat || txCat(t) === state.cat) && (!q || t.m.includes(q))));
+    if (prev > 0) {
+      const pct = Math.round((total - prev) / prev * 100);
+      yoy = t("yoy", `<span class="${pct > 0 ? "up" : "down"}">${ico(pct > 0 ? "trending-up" : "trending-down")} ${Math.abs(pct)}%</span>`, pct, eur.format(prev), prevY);
+    }
+  }
+  $("kYoy").innerHTML = yoy;
+
+  const keys = state.month ? [] : monthsWithData(state.year);
+  const span = monthSpan(keys);
+  $("kAvg").textContent = state.month || !span ? "—" : eur.format(total / span);
+  $("kAvgNote").textContent = state.month ? t("pickAll") : t("overMonths", span.toLocaleString(T[LANG].locale, { maximumFractionDigits: 1, minimumFractionDigits: 1 }));
+  $("kCount").textContent = rows.length;
+  const purchases = rows.filter(t => t.a > 0);
+  $("kCountNote").textContent = purchases.length ? t("perPurchase", eur2.format(sum(purchases) / purchases.length)) : "";
+  const bc = {}; rows.forEach(t => { const c = txCat(t); bc[c] = (bc[c] || 0) + t.a; });
+  const top = Object.entries(bc).sort((a, b) => b[1] - a[1])[0];
+  $("kCat").textContent = top ? catName(top[0]) : "—";
+  $("kCatNote").textContent = top && total ? t("ofSpend", eur.format(top[1]), Math.round(top[1] / total * 100)) : "";
+}
+
+function renderMonthly() {
+  const byYear = !state.year;
+  const rows = filtered("month");
+  const keys = byYear ? YEARS : MONTHS.map((_, i) => `${state.year}-${String(i + 1).padStart(2, "0")}`);
+  $("chartTitle").textContent = byYear ? t("byYear") : t("byMonth", state.year);
+  const partial = LAST.slice(0, 4) === (state.year || LAST.slice(0, 4)) && LAST.slice(5) !== "12-31";
+  $("chartHint").textContent = (byYear ? t("clickYear") : t("clickMonth")) + (partial ? t("dataTo", `${fmtDate(LAST)} ${LAST.slice(0, 4)}`) : "");
+  const box = $("monthly");
+  const W = Math.max(300, box.clientWidth), H = W < 520 ? 210 : 260;
+  const m = { t: 22, r: 8, b: 26, l: 48 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const data = keys.map(k => {
+    const r = rows.filter(t => t.d.startsWith(k));
+    return { k, parts: BANKS.map(([b]) => Math.max(0, sum(r.filter(t => t.bank === b)))), n: r.length };
+  });
+  const max = Math.max(1, ...data.map(d => d.parts.reduce((a, b) => a + b, 0)));
+  const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
+  const y = v => m.t + ih - v / top * ih;
+  const band = iw / data.length, bw = Math.min(byYear ? 72 : 46, band * 0.62);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("chartAria")}">`;
+  for (let v = 0; v <= top + 1e-6; v += step) {
+    s += `<line class="${v ? "gridline" : "base"}" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>`;
+    s += `<text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${fmtK(v)}</text>`;
+  }
+  data.forEach((d, i) => {
+    const x = m.l + band * i + (band - bw) / 2;
+    const dimmed = state.month && state.month !== d.k;
+    let base = 0;
+    const segs = d.parts.map((v, j) => ({ v, j })).filter(p => p.v > 0);
+    segs.forEach((p, idx) => {
+      const y0 = y(base), y1 = y(base + p.v);
+      const isTop = idx === segs.length - 1;
+      const h = Math.max(0, y0 - y1 - (isTop ? 0 : 2));
+      const fill = `var(${BANKS[p.j][1]})`;
+      s += isTop ? `<path d="${topRounded(x, y0 - h, bw, h, Math.min(4, h))}" fill="${fill}" opacity="${dimmed ? .3 : 1}"/>`
+                 : `<rect x="${x}" y="${y0 - h}" width="${bw}" height="${h}" fill="${fill}" opacity="${dimmed ? .3 : 1}"/>`;
+      base += p.v;
+    });
+    const tot = d.parts.reduce((a, b) => a + b, 0);
+    if (tot && W >= 520) s += `<text class="total" x="${x + bw / 2}" y="${y(tot) - 6}" text-anchor="middle">${fmtK(tot)}</text>`;
+    s += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle">${byYear ? d.k : W < 420 ? MONTHS[+d.k.slice(5) - 1][0] : MONTHS[+d.k.slice(5) - 1]}</text>`;
+    if (d.n) s += `<rect class="hit" data-i="${i}" x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ih}"/>`;
+  });
+  s += `</svg><div class="tip" hidden></div>`;
+  box.innerHTML = s;
+  const tip = box.querySelector(".tip");
+  box.querySelectorAll(".hit").forEach(el => {
+    const d = data[+el.dataset.i];
+    el.addEventListener("mousemove", e => {
+      const tot = d.parts.reduce((a, b) => a + b, 0);
+      tip.innerHTML = `<b>${byYear ? d.k : monthLabel(d.k)}</b>` + BANKS.map(([b, v], j) =>
+        d.parts[j] ? `<div class="r"><span><i class="dot" style="background:var(${v})"></i>${b}</span><span class="num">${eur.format(d.parts[j])}</span></div>` : "").join("") +
+        `<div class="r" style="margin-top:4px;border-top:1px solid var(--line);padding-top:4px"><span>${t("totalTx", d.n)}</span><span class="num">${eur.format(tot)}</span></div>`;
+      tip.hidden = false;
+      const r = box.getBoundingClientRect();
+      let left = e.clientX - r.left + 14; if (left + 180 > r.width) left = e.clientX - r.left - 194;
+      tip.style.left = Math.max(0, left) + "px"; tip.style.top = Math.max(0, e.clientY - r.top - 40) + "px";
+    });
+    el.addEventListener("mouseleave", () => tip.hidden = true);
+    el.addEventListener("click", () => {
+      if (byYear) { state.year = d.k; state.month = ""; }
+      else state.month = state.month === d.k ? "" : d.k;
+      render();
+    });
+  });
+}
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+function topRounded(x, y, w, h, r) { return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`; }
+
+function renderCats() {
+  const rows = filtered("cat");
+  const total = sum(rows), by = {};
+  rows.forEach(t => { const c = txCat(t); by[c] = (by[c] || 0) + t.a; });
+  const list = Object.entries(by).filter(e => Math.abs(e[1]) > 0.005).sort((a, b) => b[1] - a[1]);
+  const max = Math.max(1, ...list.map(e => e[1]));
+  $("cats").innerHTML = list.map(([k, v]) => `
+    <button type="button" class="row-btn ${state.cat && state.cat !== k ? "dim" : ""}" data-cat="${k}" aria-pressed="${state.cat === k}">
+      <span class="name">${ico(CAT_ICONS[k] || "package")}${catName(k)}</span><span class="track"><span class="fill" style="width:${Math.max(0, v) / max * 100}%"></span></span>
+      <span class="amt">${eur.format(v)}</span><span class="pct">${total ? Math.round(v / total * 100) : 0}%</span>
+    </button>`).join("") || `<p class="hint">${t("noSpend")}</p>`;
+  $("cats").querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", () => { state.cat = state.cat === b.dataset.cat ? "" : b.dataset.cat; render(); }));
+}
+
+function renderMerchants(rows) {
+  const by = {};
+  rows.forEach(t => { const o = by[t.m] || (by[t.m] = { v: 0, n: 0 }); o.v += t.a; o.n++; });
+  const list = Object.entries(by).sort((a, b) => b[1].v - a[1].v).slice(0, 10);
+  const max = Math.max(1, ...list.map(e => e[1].v));
+  const curQ = state.q.trim().toUpperCase();
+  $("merchants").innerHTML = list.map(([k, o]) => `
+    <button type="button" class="row-btn" data-merch="${esc(k)}" aria-pressed="${curQ === k}">
+      <span class="name" title="${esc(k)}">${esc(k)}</span><span class="track"><span class="fill" style="width:${Math.max(0, o.v) / max * 100}%"></span></span>
+      <span class="amt">${eur.format(o.v)}</span><span class="cnt">×${o.n}</span>
+    </button>`).join("") || `<p class="hint">${t("noMerch")}</p>`;
+  $("merchants").querySelectorAll("[data-merch]").forEach(b => b.addEventListener("click", () => {
+    const m = b.dataset.merch;
+    state.q = state.q.trim().toUpperCase() === m ? "" : m;
+    $("q").value = state.q;
+    state.shown = 60;
+    render();
+  }));
+}
+
+function buildCatSelectHtml(merchant, currentCat) {
+  const isCustom = !!customCats[merchant];
+  const opts = Object.keys(CATS).map(c =>
+    `<option value="${c}"${c === currentCat ? " selected" : ""}>${esc(catName(c))}</option>`
+  ).join("");
+  return `<select class="cat-sel${isCustom ? " is-custom" : ""}" data-merch-cat="${esc(merchant)}" aria-label="${esc(merchant)}">${opts}</select>`;
+}
+
+function renderTable(rows) {
+  const sorted = [...rows].sort((a, b) => (state.sort === "a" ? a.a - b.a : a.d < b.d ? -1 : a.d > b.d ? 1 : 0) * state.dir);
+  $("txCount").textContent = t("shown", rows.length, eur2.format(sum(rows)));
+  const showYear = !state.year;
+  $("tbody").innerHTML = sorted.slice(0, state.shown).map(r => {
+    const c = txCat(r);
+    const dotVar = r.bank === "NBG" ? "--nbg" : r.p === "areti" ? "--areti" : "--alpha";
+    return `<tr>
+    <td class="muted num">${fmtDate(r.d)}${showYear ? " " + r.d.slice(0, 4) : ""}</td>
+    <td class="m">${esc(r.m)}</td>
+    <td class="muted hide-sm">${buildCatSelectHtml(r.m, c)}</td>
+    <td class="muted hide-sm"><span class="tag"><i class="dot" style="background:var(${dotVar})"></i>${r.bank} ${esc(r.src)}</span></td>
+    <td class="r num ${r.a < 0 ? "refund" : ""}">${r.a < 0 ? "−" + eur2.format(-r.a) + " " + t("refund") : eur2.format(r.a)}</td></tr>`;
+  }).join("");
+  $("tbody").querySelectorAll("[data-merch-cat]").forEach(sel => {
+    sel.addEventListener("change", () => setMerchantCat(sel.dataset.merchCat, sel.value));
+  });
+  $("moreBtn").parentElement.hidden = rows.length <= state.shown;
+}
+
+function renderChips(rowsCount = 0) {
+  const hasQ = !!state.q.trim();
+  $("searchWrap").classList.toggle("is-active", hasQ);
+  $("qClear").hidden = !hasQ;
+  $("qBadge").hidden = !hasQ;
+  if (hasQ) $("qBadge").textContent = String(rowsCount);
+
+  const chips = [];
+  if (!IS_ARETI_PAGE && state.owner !== "all") {
+    chips.push(["owner", state.owner === "areti" ? t("ownerAreti") : t("ownerArgiris")]);
+  }
+  if (state.bank !== "all") chips.push(["bank", state.bank]);
+  if (state.month) chips.push(["month", monthLabel(state.month)]);
+  if (state.cat) chips.push(["cat", catName(state.cat)]);
+  if (state.quick !== "all") {
+    const qMap = { big: t("qfBig"), bills: t("qfBills"), refund: t("qfRefund") };
+    chips.push(["quick", qMap[state.quick] || state.quick]);
+  }
+  if (hasQ) chips.push(["q", state.q.trim()]);
+  let html = chips.map(([k, l]) => `<button type="button" class="chip" data-clear="${k}" aria-label="${esc(t("clear", l))}">${esc(l)} ${ico("x")}</button>`).join("");
+  if (chips.length > 1) {
+    html += `<button type="button" class="chip chip-reset" data-clear="ALL">${esc(t("resetAll"))} ${ico("rotate-ccw")}</button>`;
+  }
+  $("chips").innerHTML = html;
+  $("chips").querySelectorAll("[data-clear]").forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.clear;
+    if (k === "ALL") {
+      if (!IS_ARETI_PAGE) state.owner = "all";
+      state.bank = "all"; state.month = ""; state.cat = ""; state.quick = "all"; state.q = ""; $("q").value = "";
+    } else if (k === "owner" || k === "bank" || k === "quick") {
+      state[k] = "all";
+    } else {
+      state[k] = "";
+      if (k === "q") $("q").value = "";
+    }
+    state.shown = 60;
+    render();
+  }));
+}
+
+// ---- Gemini AI Merchant Categorizer & Smart Audit Panel ----
+let expAiMinimized = true;
+let expAiScope = "audit";
+let expAiLoading = false;
+
+const AUDIT_HIGHLIGHTS = [
+  {
+    m: "AEEGA PAGIES",
+    extraM: ["AEEGA ETHNIKI"],
+    oldCat: "out",
+    noteEl: "ΑΕΕΓΑ (Εθνική Ασφαλιστική · Πάγιες εντολές ασφαλίστρων). Διορθώθηκε από «Εστίαση & Ταξίδια» (όπου έμπαινε λόγω σύγχυσης του AEEGA με την AEGEAN) στη νέα κατηγορία «Ασφάλειες & φόροι».",
+    noteEn: "Ethniki Insurance (AEEGA standing orders). Moved out of Dining/Travel (where it was conflated with AEGEAN) into 'Insurance & taxes'."
+  },
+  {
+    m: "ELPEDISON MASS PAYMENT",
+    extraM: ["ELPEDISON"],
+    oldCat: "other",
+    noteEl: "Λογαριασμοί ρεύματος/ενέργειας Elpedison (40 κινήσεις · 2.261,53 €). Μεταφέρθηκαν από τα «Άλλα» στην «Ενέργεια, νερό & τηλεπικοινωνίες» μαζί με την Enerwave.",
+    noteEn: "Elpedison electricity bills (40 transactions · €2,261.53). Moved from 'Other' to 'Energy, water & telecom'."
+  },
+  {
+    m: "DOY TAX PAYMENT",
+    extraM: ["COVER INSURANCE AGENT", "EVERYPAY*HELLAS DIRECT", "DIMOS PARGAS"],
+    oldCat: "other",
+    noteEl: "Πληρωμές Εφορίας / ΔΟΥ σε δόσεις (40 κινήσεις · 1.320,71 €) + ασφαλιστήρια συμβόλαια (Cover Insurance 463,27 €, Hellas Direct). Μεταφέρθηκαν στις «Ασφάλειες & φόροι».",
+    noteEn: "Tax office (DOY) instalments (40 tx · €1,320.71) and insurance policies (Cover Insurance €463.27). Moved from 'Other' to 'Insurance & taxes'."
+  },
+  {
+    m: "BKG*BOOKING.COM HOTEL",
+    extraM: ["FLETCHER DOORWERTH", "AEGEAN_WEB_", "ENTERPRISE RENT A CAR", "EPASS.NAODOS.GR", "ANANTI RESORT GR", "OSCAR OLYMPIC MAE", "DISCOVERCARS"],
+    oldCat: "other",
+    noteEl: "Ξενοδοχεία (Booking, Fletcher, Ananti, Oscar Olympic), αεροπορικά (Aegean), ενοικιάσεις αυτοκινήτων & διόδια (Αττική/Νέα Οδός). Ξεχωρίστηκαν στη νέα κατηγορία «Ταξίδια, ξενοδοχεία & μετακινήσεις».",
+    noteEn: "Hotels (Booking, Fletcher, Ananti, Oscar Olympic), flights (Aegean), car rentals & highway tolls separated into 'Travel, hotels & transport'."
+  },
+  {
+    m: "APOTHEMA EPE",
+    extraM: ["SKROUTZ", "WWW.AMAZON.* N09X628W4", "CUBESTORE.GR", "KLARNA*SKROUTZ", "SHOPFLIX.GR"],
+    oldCat: "other",
+    noteEl: "Ηλεκτρικές συσκευές & e-shops τεχνολογίας (Apothema.gr 19 δόσεις · 641,26 €, Skroutz, Amazon, Cubestore). Μεταφέρθηκαν από τα «Άλλα» στα «Ηλεκτρονικά & e-shops».",
+    noteEn: "Appliances & tech e-shops (Apothema.gr 19 instalments · €641.26, Skroutz, Amazon, Cubestore). Moved from 'Other' to 'Electronics & e-shops'."
+  },
+  {
+    m: "APPLE.COM/BILL",
+    extraM: ["NETFLIX.COM", "NETFLIX INTERNATIONAL", "PAYPAL *SPOTIFY*P44CE5", "MOL*MOBILREDFOX KFT"],
+    oldCat: "other",
+    noteEl: "Μηνιαίες ψηφιακές συνδρομές (Apple Services 23×, Netflix 15× 15,99 €, Spotify, Mobilredfox). Ομαδοποιήθηκαν στη νέα κατηγορία «Συνδρομές & ψηφιακές υπηρεσίες».",
+    noteEn: "Recurring digital subscriptions (Apple Services 23×, Netflix 15× €15.99, Spotify) grouped into 'Subscriptions & digital'."
+  },
+  {
+    m: "TOBROU D CH",
+    extraM: ["ABERCROMBIE", "VASSIA KOSTARA LIMITED", "D. KAI R. LIAKOTITIS E", "MYSHOE", "KLARNA*GOMENIN", "INTIMISSIMI", "MELIZ MONOPROSOPI I.K."],
+    oldCat: "other",
+    noteEl: "Αναγνώριση μέσω ΓΕΜΗ: Τόμπρος (Ένδυση Ίλιον · 266 €), Λιακοτίτης/Simple Caracters (Χαλάνδρι · 119 €), Vassia Kostara (130 €), Abercrombie, MyShoe, Meliz Dance Shop → «Ένδυση & υπόδηση».",
+    noteEn: "Registry lookup: Tobros Clothing (Ilion · €266), Liakotitis/Simple Caracters (€119), Vassia Kostara (€130), Abercrombie, MyShoe → 'Clothing & shoes'."
+  },
+  {
+    m: "BARBERADIKO HAIR LAB",
+    extraM: ["PRISMA YPERVASI GP", "HELLENIC AMERICAN UNIO", "IKEA", "ZAFEIRIOU I BROS G", "AFOI IOANNI ZAFEIRIOY", "TZORTZAKIS GEORGIOS", "JUMBO SA"],
+    oldCat: "other",
+    noteEl: "Αναγνώριση μέσω ΓΕΜΗ: Φροντιστήρια Πρίσμα-Υπέρβαση (230 €), Ελληνοαμερικανική Ένωση (205 €), Βιβλιοπωλείο Ζαφειρίου (138 €), ΙΚΕΑ (198 €), Τζωρτζάκης, Barberadiko (366 €) → «Σπίτι, βιβλία & πολυκαταστήματα».",
+    noteEn: "Registry lookup: Prisma-Ypervasi Tutoring (€230), Hellenic American Union (€205), Zafeiriou Bookstore (€138), IKEA (€198), Barberadiko (€366) → 'Home, books & stores'."
+  },
+  {
+    m: "BARBARA QUE",
+    extraM: ["ANDROULIDAKIS NIKOLAOS", "S P G B CAPITAL E E", "FOOD CENTER AE", "CHILANGO", "OSTERIA DA FORTUNATA B", "TO CHAGIATI FOTOS OE", "AL DUOMO"],
+    oldCat: "other",
+    noteEl: "Εστιατόρια & χώροι εστίασης που βρίσκονταν στα «Άλλα»: Barbara Que Βριλήσσια (427,50 €), Ανδρουλιδάκης «Το Μιτάτο» Ίλιον (184,60 €), SPGB Capital (172,50 €), Osteria da Fortunata (98 €) → «Εστίαση, καφέ & διασκέδαση».",
+    noteEn: "Restaurants previously in 'Other': Barbara Que (€427.50), Androulidakis 'To Mitato' (€184.60), SPGB Capital (€172.50), Osteria da Fortunata (€98) → 'Dining, cafés & entertainment'."
+  }
+];
+
+const DEFAULT_ADVISOR_CARDS = [
+  {
+    badge: "Ενέργεια · 4.598 €",
+    title: "Διπλοί Πάροχοι Ρεύματος (Enerwave & Elpedison)",
+    amt: "~242 €/μήνα",
+    noteEl: "Στις κάρτες εμφανίζονται τακτικές πάγιες χρεώσεις τόσο σε Enerwave (2.337 € · 43 κιν.) όσο και σε Elpedison (2.262 € · 40 κιν.). Ελέγξτε αν αφορούν 2 παροχές και συγκρίνετε σταθερά (μπλε) τιμολόγια.",
+    noteEn: "Cards show recurring payments to both Enerwave (€2,337 · 43 tx) and Elpedison (€2,262 · 40 tx). Check if they cover two meters and compare fixed-rate plans.",
+    filterQ: "ELPEDISON"
+  },
+  {
+    badge: "Ασφάλειες & ΔΟΥ · 6.626 €",
+    title: "ΑΕΕΓΑ Εθνική Ασφαλιστική & Δόσεις ΔΟΥ",
+    amt: "~358 €/μήνα (ΑΕΕΓΑ)",
+    noteEl: "Η ΑΕΕΓΑ (4.771 € σε 14 κινήσεις) αποτελεί τη μεγαλύτερη μεμονωμένη πάγια δαπάνη νοικοκυριού, ακολουθούμενη από τις ρυθμίσεις/δόσεις ΔΟΥ (1.321 €) και την Cover Insurance (463 €).",
+    noteEn: "AEEGA Ethniki Insurance (€4,771 across 14 charges) is the largest single household recurring obligation, followed by DOY tax instalments (€1,321).",
+    filterQ: "AEEGA"
+  },
+  {
+    badge: "Τηλεπικοινωνίες · 1.914 €",
+    title: "Nova + Cosmote + Vodafone",
+    amt: "~100 €/μήνα",
+    noteEl: "Συνδυαστικά πληρώνονται Nova (1.176 € · 36 κιν.), Cosmote Σταθερή/Κινητή (530 € · 25 κιν.) και Vodafone CU/Top-up (214 € · 17 κιν.). Ενοποίηση σε οικογενειακό πακέτο μειώνει το πάγιο κατά 20–30%.",
+    noteEn: "Combined telecom spend across Nova (€1,176), Cosmote (€530), and Vodafone (€214). Bundling into a converged family plan can save 20–30%.",
+    filterQ: "NOVA"
+  },
+  {
+    badge: "Ψηφιακές Συνδρομές · 544 €",
+    title: "Apple Services, Netflix & Spotify",
+    amt: "~29 €/μήνα",
+    noteEl: "Apple.com/bill (254,27 € σε 23 χρεώσεις των 7,49 €, 9,99 € και 22,99 €) + Netflix Premium (239,85 € · 15× 15,99 €). Ελέγξτε στο Apple ID > Συνδρομές αν υπάρχουν διπλές ή ανενεργές υπηρεσίες.",
+    noteEn: "Apple.com/bill (€254.27 across 23 charges of €7.49, €9.99, and €22.99) + Netflix (€239.85 · 15× €15.99). Check Apple ID > Subscriptions for unused apps.",
+    filterQ: "APPLE.COM"
+  },
+  {
+    badge: "Άτοκες Δόσεις · 1.544 €",
+    title: "Ενεργά Πλάνα Δόσεων (Apothema, Public, Κωτσόβολος)",
+    amt: "~110 €/μήνα",
+    noteEl: "Apothema.gr (641 € · 38 €/μήνα, λήγει σε 2 δόσεις!), Public (399 € · 33,25 €/μήνα), Κωτσόβολος (300 € · 25 €/μήνα) και Νικολουδάκης (102,86 €/μήνα · 02/07).",
+    noteEn: "Active instalment plans: Apothema.gr (€38/mo, 10/12), Public (€33.25/mo), Kotsovolos (€25/mo), and Nikoloudakis (€102.86/mo, 02/07).",
+    filterQ: "APOTHEMA"
+  },
+  {
+    badge: "Καθημερινές Συνήθειες · 799 €",
+    title: "Καφές (Dabov) & Διόδια (e-Pass)",
+    amt: "133× Dabov · 18× e-Pass",
+    noteEl: "Το Dabov Specialty Coffee στο Ίλιον είναι ο #1 έμπορος σε συχνότητα (133 επισκέψεις · 378,50 €), ενώ η Αττική/Νέα Οδός (e-Pass) έχει 18 φορτίσεις (420 €).",
+    noteEn: "Dabov Specialty Coffee is the #1 merchant by frequency (133 visits · €378.50), while e-Pass tolls account for 18 top-ups (€420).",
+    filterQ: "DABOV"
+  }
+];
+
+function getApiKey() {
+  try { return localStorage.getItem("gemini-api-key") || ""; } catch (e) { return ""; }
+}
+
+function toggleExpAiMinimize() {
+  expAiMinimized = !expAiMinimized;
+  const panel = $("expAiPanel"), body = $("expAiBodyWrap"), btn = $("expAiMinBtn"), head = $("expAiHeadToggle");
+  panel.classList.toggle("is-minimized", expAiMinimized);
+  body.hidden = expAiMinimized;
+  btn.setAttribute("aria-expanded", String(!expAiMinimized));
+  head.setAttribute("aria-expanded", String(!expAiMinimized));
+  $("expAiMinLbl").textContent = expAiMinimized ? t("aiExpand") : t("aiMinimize");
+  const ic = $("expAiMinIcon");
+  if (ic) ic.outerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="expAiMinIcon" class="lucide lucide-${expAiMinimized ? "chevron-down" : "chevron-up"}" aria-hidden="true">${LUCIDE[expAiMinimized ? "chevron-down" : "chevron-up"]}</svg>`;
+}
+
+function renderExpAiPanel() {
+  const inScope = TX.filter(t => !state.year || t.d.startsWith(state.year));
+  const totalSpend = sum(inScope) || 1;
+  const otherRows = inScope.filter(t => txCat(t) === "other");
+  const otherSpend = sum(otherRows);
+  const otherMerchMap = {};
+  otherRows.forEach(t => {
+    const o = otherMerchMap[t.m] || (otherMerchMap[t.m] = { v: 0, n: 0, last: "", bank: t.bank });
+    o.v += t.a; o.n++; if (t.d > o.last) o.last = t.d;
+  });
+  const otherMerchList = Object.entries(otherMerchMap).sort((a, b) => b[1].v - a[1].v);
+
+  $("expAiBadgeTxt").textContent = t("aiBadgeTxt", eur.format(otherSpend), (otherSpend / totalSpend * 100).toFixed(1));
+  $("expAiOtherTabLbl").textContent = t("aiScopeOther", otherMerchList.length, eur.format(otherSpend));
+  $("expAiResetBtn").hidden = Object.keys(customCats).length === 0;
+  $("expAiKeyBtnLbl").textContent = getApiKey() ? t("aiKeySavedBtn") : t("aiKeyBtn");
+  $("expAiFetchLbl").textContent = expAiScope === "advisor" ? t("aiFetchAdvisorBtn") : t("aiFetchBtn");
+
+  document.querySelectorAll("#expAiScopeSeg button").forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.scope === expAiScope));
+  });
+
+  const st = $("expAiStatus"), grid = $("expAiGrid");
+  if (expAiScope === "audit") {
+    st.innerHTML = `<span>${esc(t("aiAuditStatus"))}</span>`;
+    grid.innerHTML = AUDIT_HIGHLIGHTS.map(item => {
+      const allM = [item.m, ...(item.extraM || [])];
+      const mRows = inScope.filter(r => allM.includes(r.m));
+      const v = sum(mRows), n = mRows.length;
+      const curC = txCat(TX.find(r => r.m === item.m) || { m: item.m, c: "other" });
+      return `<div class="exp-ai-card-wrap"><article class="exp-ai-card">
+        <div class="exp-ai-top">
+          <span class="exp-ai-badge">${ico(CAT_ICONS[curC] || "package")} ${esc(catName(curC))}</span>
+          <span class="exp-ai-amt">${eur2.format(v)} · ${n}×</span>
+        </div>
+        <div class="exp-ai-title">
+          <span>${esc(item.m)}${item.extraM && item.extraM.length ? ` +${item.extraM.length}` : ""}</span>
+          <button type="button" data-ai-filter="${esc(item.m)}">${ico("receipt")} ${esc(t("aiFilterBtn"))}</button>
+        </div>
+        <div class="exp-ai-note">${esc(LANG === "el" ? item.noteEl : item.noteEn)}</div>
+        <div class="exp-ai-foot">
+          <span class="hint">${esc(catName(item.oldCat))} →</span>
+          ${buildCatSelectHtml(item.m, curC)}
+        </div>
+      </article></div>`;
+    }).join("");
+  } else if (expAiScope === "other") {
+    st.innerHTML = `<span>${esc(t("aiOtherStatus", otherMerchList.length, eur2.format(otherSpend)))}</span>`;
+    grid.innerHTML = otherMerchList.map(([m, o]) => {
+      const curC = txCat({ m, c: "other" });
+      const sug = aiSuggestedCats[m];
+      return `<div class="exp-ai-card-wrap"><article class="exp-ai-card${sug ? " is-ai-suggested" : ""}">
+        <div class="exp-ai-top">
+          <span class="exp-ai-badge">${ico(CAT_ICONS[curC] || "package")} ${esc(o.bank)} · ${fmtDate(o.last)} ${o.last.slice(0, 4)}</span>
+          <span class="exp-ai-amt">${eur2.format(o.v)} (${o.n}×)</span>
+        </div>
+        <div class="exp-ai-title">
+          <span>${esc(m)}</span>
+          <button type="button" data-ai-filter="${esc(m)}">${ico("receipt")} ${esc(t("aiFilterBtn"))}</button>
+        </div>
+        <div class="exp-ai-note">${sug ? `<b>AI:</b> ${esc(sug.reason)}` : (LANG === "el" ? "Επωνυμία POS φυσικού προσώπου / τοπικής επιχείρησης. Επιλέξτε κατηγορία ή πατήστε Αναγνώριση με Gemini AI." : "Individual POS merchant name. Select a category or run Gemini AI lookup.")}</div>
+        <div class="exp-ai-foot">
+          ${sug && sug.cat && sug.cat !== curC ? `<button type="button" class="btn-primary" style="min-height:28px;padding:4px 9px;font-size:11.5px" data-ai-apply="${esc(m)}" data-ai-cat="${esc(sug.cat)}">${ico("check")} ${esc(t("aiApplyBtn"))} ${esc(catName(sug.cat))}</button>` : `<span class="hint">${esc(catName(curC))}</span>`}
+          ${buildCatSelectHtml(m, curC)}
+        </div>
+      </article></div>`;
+    }).join("");
+  } else {
+    st.innerHTML = `<span>${esc(t("aiAdvisorStatus"))}</span>`;
+    let cards = DEFAULT_ADVISOR_CARDS;
+    try {
+      const cached = JSON.parse(localStorage.getItem("hx-ai-advisor-cards") || "null");
+      if (Array.isArray(cached) && cached.length) cards = cached;
+    } catch (e) {}
+    grid.innerHTML = cards.map(c => `<div class="exp-ai-card-wrap"><article class="exp-ai-card">
+      <div class="exp-ai-top">
+        <span class="exp-ai-badge">${ico("sparkles")} ${esc(c.badge)}</span>
+        <span class="exp-ai-amt">${esc(c.amt)}</span>
+      </div>
+      <div class="exp-ai-title">
+        <span>${esc(c.title)}</span>
+        ${c.filterQ ? `<button type="button" data-ai-filter="${esc(c.filterQ)}">${ico("receipt")} ${esc(t("aiFilterBtn"))}</button>` : ""}
+      </div>
+      <div class="exp-ai-note">${esc(LANG === "el" ? (c.noteEl || c.note) : (c.noteEn || c.note || c.noteEl))}</div>
+    </article></div>`).join("");
+  }
+
+  grid.querySelectorAll("[data-merch-cat]").forEach(sel => {
+    sel.addEventListener("change", () => setMerchantCat(sel.dataset.merchCat, sel.value));
+  });
+  grid.querySelectorAll("[data-ai-filter]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.q = btn.dataset.aiFilter;
+      $("q").value = state.q;
+      state.cat = "";
+      state.month = "";
+      render();
+      $("tbody").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  });
+  grid.querySelectorAll("[data-ai-apply]").forEach(btn => {
+    btn.addEventListener("click", () => setMerchantCat(btn.dataset.aiApply, btn.dataset.aiCat));
+  });
+}
+
+async function runGeminiExpenseAi() {
+  if (expAiLoading) return;
+  const key = getApiKey();
+  if (!key) {
+    $("expAiKeyForm").hidden = false;
+    $("expAiKeyBtn").setAttribute("aria-expanded", "true");
+    $("expAiKeyInput").focus();
+    return;
+  }
+  const loader = $("expAiLoader"), btn = $("expAiFetchBtn"), srcBox = $("expAiSources");
+  expAiLoading = true;
+  btn.disabled = true;
+  loader.hidden = false;
+
+  try {
+    const inScope = TX.filter(t => !state.year || t.d.startsWith(state.year));
+    const otherRows = inScope.filter(t => txCat(t) === "other");
+    const otherMap = {};
+    otherRows.forEach(t => {
+      const o = otherMap[t.m] || (otherMap[t.m] = { v: 0, n: 0, d: t.d });
+      o.v += t.a; o.n++;
+    });
+    const listLines = Object.entries(otherMap).sort((a, b) => b[1].v - a[1].v).slice(0, 25)
+      .map(([m, o]) => `- ${m}: ${o.v.toFixed(2)} EUR (${o.n}x, date ${o.d})`).join("\n");
+
+    const prompt = expAiScope === "advisor"
+      ? `Είσαι οικονομικός σύμβουλος ελληνικού νοικοκυριού. Αναλύεις τα ετήσια τραπεζικά έξοδα καρτών:
+- Ενέργεια & Τηλεπικοινωνίες (bills): 7.662 € (Enerwave 2.337 €, Elpedison 2.262 €, Nova 1.176 €, Cosmote 530 €, Vodafone 214 €, ΕΥΔΑΠ 238 €)
+- Ασφάλειες & Φόροι (ins): 6.626 € (ΑΕΕΓΑ Εθνική Ασφαλιστική 4.771 €, ΔΟΥ 1.321 €, Cover Insurance 463 €)
+- Ταξίδια & Μετακινήσεις (travel): 6.323 € (Booking, Fletcher, Aegean, Enterprise, e-Pass 420 €)
+- Εστίαση & Καφέ (out): 5.174 € (Dabov 133x 378,50 €, Barbara Que 427,50 € κ.ά.)
+- Συνδρομές (subs): 544 € (Apple.com/bill 254 €, Netflix 240 €)
+- Ηλεκτρονικά & Δόσεις (tech): 2.160 € (Apothema 641 €, Public 399 €, Κωτσόβολος 300 €)
+Ψάξε τρέχοντα προγράμματα στην Ελλάδα και επέστρεψε ΜΟΝΟ JSON array με 6 κάρτες συμβουλών:
+[{"badge":"Κατηγορία · Ποσό","title":"Τίτλος","amt":"Ποσό/μήνα ή όφελος","noteEl":"Συγκεκριμένη πρόταση εξοικονόμησης στα Ελληνικά","noteEn":"Specific advice in English","filterQ":"MERCHANT"}]`
+      : `Είσαι ειδικός αναγνώρισης ελληνικών επωνυμιών POS (ΓΕΜΗ / Επαγγελματικοί Κατάλογοι).
+Για τους παρακάτω εμπόρους από ελληνικές κάρτες (περιοχή Αθήνα / Ίλιον / Αταλάντη / Πάργα / Χαλκίδα / Λιβαδειά):
+${listLines}
+
+Διαθέσιμες κατηγορίες: food, out, travel, bills, ins, health, clothes, tech, dept, subs, car, bet, other.
+Ψάξε στο web/ΓΕΜΗ τι επιχείρηση ή επαγγελματίας (π.χ. ιατρός -> health, εστίαση -> out, ένδυση -> clothes, κατάστημα/υπηρεσία -> dept) αντιστοιχεί σε κάθε επωνυμία και επέστρεψε ΜΟΝΟ JSON array:
+[{"m":"EXACT_MERCHANT_NAME","cat":"health|out|clothes|dept|food|car|ins|travel|tech","reason":"Σύντομη επεξήγηση στα Ελληνικά τι επιχείρηση είναι"}]`;
+
+    const models = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+    let text = "", sources = [];
+    for (const useSearch of [true, false]) {
+      if (text) break;
+      for (const model of models) {
+        try {
+          const payload = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } };
+          if (useSearch) payload.tools = [{ google_search: {} }];
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload)
+          });
+          const data = await res.json();
+          if (res.ok && data.candidates && data.candidates[0]) {
+            const cand = data.candidates[0];
+            text = ((cand.content && cand.content.parts) || []).map(p => p.text || "").join("\n");
+            const chunks = (cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
+            sources = chunks.map(c => c.web).filter(w => w && w.uri);
+            if (text) break;
+          }
+        } catch (e) {}
+      }
+    }
+    const jsonMatch = text && text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (expAiScope === "advisor") {
+        try { localStorage.setItem("hx-ai-advisor-cards", JSON.stringify(parsed)); } catch (e) {}
+      } else {
+        parsed.forEach(it => {
+          if (it && it.m && it.cat && CATS[it.cat]) {
+            aiSuggestedCats[it.m] = { cat: it.cat, reason: it.reason || "" };
+          }
+        });
+        try { localStorage.setItem("hx-ai-suggestions", JSON.stringify(aiSuggestedCats)); } catch (e) {}
+        expAiScope = "other";
+      }
+    }
+    if (sources.length) {
+      srcBox.hidden = false;
+      srcBox.innerHTML = `<span>${esc(t("aiSourcesLbl"))}</span>` + sources.slice(0, 5).map(s =>
+        `<a href="${esc(s.uri)}" target="_blank" rel="noopener">${ico("external-link")} ${esc(s.title || new URL(s.uri).hostname)}</a>`
+      ).join("");
+    }
+  } catch (e) {} finally {
+    loader.hidden = true;
+    expAiLoading = false;
+    btn.disabled = false;
+    renderExpAiPanel();
+  }
+}
+
+$("expAiMinBtn").addEventListener("click", toggleExpAiMinimize);
+$("expAiHeadToggle").addEventListener("click", toggleExpAiMinimize);
+$("expAiHeadToggle").addEventListener("keydown", e => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleExpAiMinimize(); }
+});
+$("expAiScopeSeg").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b && b.dataset.scope) {
+    expAiScope = b.dataset.scope;
+    renderExpAiPanel();
+  }
+});
+$("expAiKeyBtn").addEventListener("click", () => {
+  const f = $("expAiKeyForm");
+  f.hidden = !f.hidden;
+  $("expAiKeyBtn").setAttribute("aria-expanded", String(!f.hidden));
+  if (!f.hidden) { $("expAiKeyInput").value = getApiKey(); $("expAiKeyInput").focus(); }
+});
+$("expAiKeyToggle").addEventListener("click", () => {
+  const inp = $("expAiKeyInput"), btn = $("expAiKeyToggle");
+  const show = inp.type === "password";
+  inp.type = show ? "text" : "password";
+  btn.setAttribute("aria-pressed", String(show));
+  btn.innerHTML = ico(show ? "eye-off" : "eye");
+});
+$("expAiKeyForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const val = $("expAiKeyInput").value.trim();
+  try {
+    if (val) localStorage.setItem("gemini-api-key", val);
+    else localStorage.removeItem("gemini-api-key");
+  } catch (err) {}
+  $("expAiKeyForm").hidden = true;
+  $("expAiKeyBtn").setAttribute("aria-expanded", "false");
+  renderExpAiPanel();
+});
+$("expAiResetBtn").addEventListener("click", () => {
+  customCats = {};
+  try { localStorage.removeItem("hx-custom-cats"); } catch (e) {}
+  render();
+});
+$("expAiExportBtn").addEventListener("click", () => {
+  const merged = {};
+  TX.forEach(r => { merged[r.m] = txCat(r); });
+  const blob = new Blob([JSON.stringify(merged, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "merchant_cats.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+$("expAiFetchBtn").addEventListener("click", runGeminiExpenseAi);
+
+function render() {
+  renderHeader();
+  const rows = filtered();
+  renderKpis(rows); renderMonthly(); renderCats(); renderMerchants(rows); renderTable(rows); renderChips(rows.length); renderExpAiPanel();
+  try { localStorage.setItem(STORAGE_FILTERS_KEY, JSON.stringify({ owner: state.owner, bank: state.bank, year: state.year })); } catch (e) {}
+}
+
+$("ownerSeg").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (b && b.dataset.owner) {
+    state.owner = b.dataset.owner;
+    if (state.owner !== "all" && state.bank === "Alpha (Αρετή)") state.bank = "all";
+    if (state.owner === "areti") state.bank = "all";
+    state.shown = 60;
+    render();
+  }
+});
+$("yearSeg").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.drill) { yearSegExpanded = !yearSegExpanded; renderYearSeg(); return; }
+  state.year = b.dataset.year;
+  if (YEARS.slice(-2).includes(state.year)) yearSegExpanded = false;
+  state.month = ""; state.shown = 60;
+  render();
+});
+$("bankSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b && b.dataset.bank) { state.bank = b.dataset.bank; state.shown = 60; render(); } });
+$("mobSearchBtn").addEventListener("click", () => { const isOpen = $("searchWrap").classList.toggle("is-open"); $("mobSearchBtn").classList.toggle("is-open", isOpen); if (isOpen) $("q").focus(); });
+$("monthSel").addEventListener("change", e => { state.month = e.target.value; state.shown = 60; render(); });
+$("monthPrev").addEventListener("click", () => {
+  const ms = monthsWithData(state.year);
+  if (!ms.length) return;
+  if (!state.month) state.month = ms[ms.length - 1];
+  else { const i = ms.indexOf(state.month); if (i > 0) state.month = ms[i - 1]; }
+  state.shown = 60; render();
+});
+$("monthNext").addEventListener("click", () => {
+  const ms = monthsWithData(state.year);
+  if (!ms.length || !state.month) return;
+  const i = ms.indexOf(state.month);
+  state.month = (i >= 0 && i < ms.length - 1) ? ms[i + 1] : "";
+  state.shown = 60; render();
+});
+$("q").addEventListener("input", e => { state.q = e.target.value; state.shown = 60; render(); });
+$("qClear").addEventListener("click", () => { state.q = ""; $("q").value = ""; $("q").focus(); state.shown = 60; render(); });
+$("moreBtn").addEventListener("click", () => { state.shown += 100; renderTable(filtered()); });
+document.querySelectorAll("th [data-sort]").forEach(b => b.addEventListener("click", () => {
+  if (state.sort === b.dataset.sort) state.dir *= -1; else { state.sort = b.dataset.sort; state.dir = -1; }
+  renderTable(filtered());
+}));
+let rz, lastW = 0;
+new ResizeObserver(() => { const w = $("monthly").clientWidth; if (Math.abs(w - lastW) < 2) return; lastW = w; clearTimeout(rz); rz = setTimeout(renderMonthly, 80); }).observe($("monthly"));
+setFormats(); applyStatic(); renderYearSeg(); render();
+</script>
