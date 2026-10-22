@@ -1269,7 +1269,7 @@ ${listLines}
 Ψάξε στο web/ΓΕΜΗ τι επιχείρηση ή επαγγελματίας (π.χ. ιατρός -> health, εστίαση -> out, ένδυση -> clothes, κατάστημα/υπηρεσία -> dept) αντιστοιχεί σε κάθε επωνυμία και επέστρεψε ΜΟΝΟ JSON array:
 [{"m":"EXACT_MERCHANT_NAME","cat":"health|out|clothes|dept|food|car|ins|travel|tech","reason":"Σύντομη επεξήγηση στα Ελληνικά τι επιχείρηση είναι"}]`;
 
-    const models = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+    const models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"];
     let text = "", sources = [];
     for (const useSearch of [true, false]) {
       if (text) break;
